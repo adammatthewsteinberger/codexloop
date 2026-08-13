@@ -26,9 +26,12 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
+          # Repo default branch is develop; releases must target main only
+          # (feat → develop → TestPyPI → main → tag/PyPI).
+          target-branch: main
           release-type: python
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json

@@ -48,8 +48,11 @@ feat/* ──PR──► develop ──smoke TestPyPI──► main ──releas
 2. Push/`workflow_dispatch` **Publish TestPyPI** to verify the wheel on
    TestPyPI (`pip install -i https://test.pypi.org/simple/ --pre codexloop`).
 3. Merge to `main`.
-4. `release-please` opens a release PR from Conventional Commits.
-5. Merge the release PR → GitHub Release + tag → `publish-pypi` uploads to PyPI.
+4. `release-please` opens a release PR from Conventional Commits
+   (**always against `main`**, even though the repo default branch is
+   `develop` — see `target-branch: main` in `.github/workflows/release-please.yml`).
+5. Squash-merge the release PR → GitHub Release + tag → `publish-pypi`
+   uploads to PyPI. Do not open or merge `chore(develop): release …` PRs.
 
 Manual TestPyPI from `main`:
 
