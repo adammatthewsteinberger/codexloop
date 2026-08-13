@@ -5,16 +5,24 @@ Autonomous OpenAI Codex / GPT session runner. Same job as
 a human, and never treat `insufficient_quota` / billing as a waitable
 `rate_limit_exceeded` window.
 
-**Status:** M1–M5 implemented on `feat/m1-pure-core` (onion core, exec gateway,
-capacity probes, control plane, generated REST CLI, optional app-server transport
-with exec fallback). MIT-licensed; author Adam Matthew Steinberger.
+**Docs:** https://adammatthewsteinberger.github.io/codexloop/
+
+**Status:** M1–M5 on PyPI (`0.1.0`) — onion core, exec gateway, capacity probes,
+control plane, generated REST CLI, optional app-server transport with exec
+fallback. MIT-licensed; author Adam Matthew Steinberger.
 
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+pip install codexloop
 codexloop --version
 codexloop doctor
+```
+
+For local development:
+
+```bash
+pip install -e ".[dev]"
 ```
 
 ## Quick start

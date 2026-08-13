@@ -46,3 +46,4 @@ site/
 
 # --- SDD scratch ---
 .superpowers/
+.venv-docs/
