@@ -117,9 +117,6 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["src/codexloop"]
-# bootstrap.py is an intentional composition-root stub until later milestones
-# wire adapters into it — it has no behavior to test yet.
-omit = ["src/codexloop/bootstrap.py"]
 
 [tool.importlinter]
 root_package = "codexloop"
@@ -140,6 +137,8 @@ name = "Infrastructure only reachable from bootstrap"
 type = "forbidden"
 source_modules = ["codexloop.domain", "codexloop.application", "codexloop.cli"]
 forbidden_modules = ["codexloop.infrastructure"]
+# CLI/application may compose via bootstrap; they must not import infrastructure directly.
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "Domain is pure"

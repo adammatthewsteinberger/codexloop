@@ -10,6 +10,13 @@ from __future__ import annotations
 import typer
 
 from codexloop import __version__
+from codexloop.cli.commands.logs import logs
+from codexloop.cli.commands.prompt import prompt
+from codexloop.cli.commands.resume import resume
+from codexloop.cli.commands.run import run
+from codexloop.cli.commands.runs import runs
+from codexloop.cli.commands.status import status
+from codexloop.cli.commands.threads import threads
 
 app = typer.Typer(
     name="codexloop",
@@ -40,6 +47,15 @@ def main_callback(
     ),
 ) -> None:
     del version
+
+
+app.command()(run)
+app.command()(resume)
+app.command()(threads)
+app.command()(status)
+app.command()(logs)
+app.command()(runs)
+app.command()(prompt)
 
 
 def main() -> None:
