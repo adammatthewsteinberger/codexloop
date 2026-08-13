@@ -22,3 +22,8 @@ Coverage floors: whole package 100% (`pytest --cov=codexloop --cov-fail-under=10
 ## Commits
 
 Conventional Commits (`feat:`, `fix:`, `test:`, `chore:`, `docs:`).
+
+## Publishing
+
+See [docs/publishing.md](docs/publishing.md) for TestPyPI → PyPI Trusted
+Publishing, GitHub Environments, and the release-please flow.

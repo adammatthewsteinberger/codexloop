@@ -46,3 +46,8 @@ codexloop stop
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Publishing
+
+Releases go **TestPyPI → PyPI** via Trusted Publishing. See
+[docs/publishing.md](docs/publishing.md).

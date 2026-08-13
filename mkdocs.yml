@@ -24,4 +24,5 @@ nav:
       - ADRs: architecture/adr/index.md
   - Reference: reference/cli.md
   - Contributing: contributing.md
+  - Publishing: publishing.md
 strict: true
