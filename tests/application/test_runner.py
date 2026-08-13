@@ -469,3 +469,55 @@ async def test_stop_with_empty_remaining_work_writes_none() -> None:
 
     assert result.reason == "stop"
     assert "_none_" in artifacts["stop-summary.md"]
+
+
+async def test_capacity_rejected_turn_keeps_prior_remaining_work() -> None:
+    remaining = ["Add login", "Add logout"]
+    artifacts: dict[str, str] = {}
+    ctx, _gateway, _clock, _sleeper, store = make_ctx(
+        outcomes=[
+            _continue(remaining),
+            TurnOutcome(
+                thread_id=THREAD_ID,
+                signals=TurnSignals(
+                    http_status=429,
+                    error_code="usage_limit_reached",
+                    error_type="usage_limit_reached",
+                ),
+            ),
+        ],
+        write_artifact=artifacts.__setitem__,
+        control=FakeRunControl(script=[[], [], [Stop()]]),
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is not True
+    rejected = next(snapshot for _key, snapshot in store.saves if snapshot.get("turns") == 2)
+    assert rejected["remaining_work"] == list(remaining)
+    assert "Add login" in artifacts["stop-summary.md"]
+    assert "Add logout" in artifacts["stop-summary.md"]
+
+
+@pytest.mark.parametrize("error_code", ["insufficient_quota", "usage_limit_reached"])
+async def test_done_looking_capacity_rejected_turn_waits(error_code: str) -> None:
+    ctx, _gateway, _clock, sleeper, _store = make_ctx(
+        outcomes=[
+            TurnOutcome(
+                thread_id=THREAD_ID,
+                signals=TurnSignals(
+                    final_message=DEFAULT_DONE_MARKER,
+                    http_status=429,
+                    error_code=error_code,
+                    error_type=error_code,
+                    structured_output={"complete": True, "remaining_work": []},
+                ),
+            ),
+        ],
+        max_wait=timedelta(seconds=1),
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is not True
+    assert sleeper.requested

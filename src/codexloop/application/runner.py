@@ -144,7 +144,7 @@ class AutonomousRunner:
                         last_mark = self._record_elapsed(last_mark, self._clock.now())
                         self._ledger.record(turns=1, dollars=turn.cost_dollars)
                         capacity, completion = _interpret(turn, self._evaluator)
-                        if isinstance(completion, Continue):
+                        if isinstance(completion, Continue) and isinstance(capacity, Available):
                             remaining = list(completion.remaining)
                         self._persist(
                             key=thread_id,
