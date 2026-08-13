@@ -1,0 +1,10 @@
+"""Use case: probe capacity without spending a real turn."""
+
+from __future__ import annotations
+
+from codexloop.application.dto import ProbeResult
+from codexloop.application.runner import RunnerContext
+
+
+async def preflight(ctx: RunnerContext) -> ProbeResult:
+    return await ctx.probe.probe()

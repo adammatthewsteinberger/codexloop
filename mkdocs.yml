@@ -1,0 +1,28 @@
+site_name: codexloop
+site_description: Autonomous OpenAI Codex session runner
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+exclude_docs: |
+  plans/**
+  superpowers/**
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Guides:
+      - REST API surface: guides/rest-api-surface.md
+  - Architecture:
+      - Overview: architecture/index.md
+      - ADRs: architecture/adr/index.md
+  - Reference: reference/cli.md
+  - Contributing: contributing.md
+  - Publishing: publishing.md
+strict: true

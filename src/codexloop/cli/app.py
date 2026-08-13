@@ -10,6 +10,27 @@ from __future__ import annotations
 import typer
 
 from codexloop import __version__
+from codexloop.bootstrap import build_api_typer_app
+from codexloop.cli.commands.approval_cmd import approval_cmd
+from codexloop.cli.commands.capacity import capacity
+from codexloop.cli.commands.cwd_cmd import cwd_cmd
+from codexloop.cli.commands.doctor import doctor
+from codexloop.cli.commands.effort_cmd import effort_cmd
+from codexloop.cli.commands.logs import logs
+from codexloop.cli.commands.model_cmd import model_cmd
+from codexloop.cli.commands.prompt import prompt
+from codexloop.cli.commands.reset import reset
+from codexloop.cli.commands.resume import resume
+from codexloop.cli.commands.run import run
+from codexloop.cli.commands.runs import runs
+from codexloop.cli.commands.sandbox_cmd import sandbox_cmd
+from codexloop.cli.commands.savepoints import savepoints
+from codexloop.cli.commands.snapshot import snapshot
+from codexloop.cli.commands.status import status
+from codexloop.cli.commands.stop import stop
+from codexloop.cli.commands.threads import threads
+from codexloop.cli.commands.unwind import unwind
+from codexloop.cli.commands.watch import watch
 
 app = typer.Typer(
     name="codexloop",
@@ -42,9 +63,32 @@ def main_callback(
     del version
 
 
-def main() -> None:
+app.command()(run)
+app.command()(resume)
+app.command()(threads)
+app.command()(status)
+app.command()(logs)
+app.command()(runs)
+app.command()(prompt)
+app.command()(stop)
+app.command()(capacity)
+app.command()(doctor)
+app.command()(watch)
+app.command()(savepoints)
+app.command()(unwind)
+app.command()(reset)
+app.command()(snapshot)
+app.command("model")(model_cmd)
+app.command("effort")(effort_cmd)
+app.command("approval")(approval_cmd)
+app.command("sandbox")(sandbox_cmd)
+app.command("cwd")(cwd_cmd)
+app.add_typer(build_api_typer_app(), name="api")
+
+
+def main() -> None:  # pragma: no cover — process entrypoint
     app()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

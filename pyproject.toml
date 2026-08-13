@@ -117,9 +117,6 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["src/codexloop"]
-# bootstrap.py is an intentional composition-root stub until later milestones
-# wire adapters into it — it has no behavior to test yet.
-omit = ["src/codexloop/bootstrap.py"]
 
 [tool.importlinter]
 root_package = "codexloop"
@@ -136,13 +133,43 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Infrastructure only reachable from bootstrap"
+name = "Domain and application cannot reach infrastructure"
 type = "forbidden"
-source_modules = ["codexloop.domain", "codexloop.application", "codexloop.cli"]
+source_modules = ["codexloop.domain", "codexloop.application"]
 forbidden_modules = ["codexloop.infrastructure"]
+# Transitively sealed: application → bootstrap → infrastructure is also forbidden.
+allow_indirect_imports = false
+
+[[tool.importlinter.contracts]]
+name = "CLI cannot import infrastructure directly"
+type = "forbidden"
+source_modules = ["codexloop.cli"]
+forbidden_modules = ["codexloop.infrastructure"]
+# cli → bootstrap → infrastructure is legal; direct cli → infrastructure is not.
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "Domain is pure"
 type = "forbidden"
 source_modules = ["codexloop.domain"]
-forbidden_modules = ["openai", "anyio", "structlog", "typer", "textual", "httpx"]
+forbidden_modules = [
+    "openai",
+    "anyio",
+    "structlog",
+    "typer",
+    "textual",
+    "httpx",
+    "anthropic",
+    "claude_agent_sdk",
+    "claudeloop",
+    "pydantic",
+    "click",
+    "rich",
+    "requests",
+    "aiohttp",
+    "fastapi",
+    "flask",
+    "boto3",
+    "docker",
+    "sqlalchemy",
+]
