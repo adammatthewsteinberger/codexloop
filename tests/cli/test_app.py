@@ -12,7 +12,28 @@ from codexloop.application.dto import RunResult
 from codexloop.cli.app import app
 from codexloop.domain.control import Stop
 
-COMMANDS = ("run", "resume", "threads", "status", "logs", "runs", "prompt")
+COMMANDS = (
+    "run",
+    "resume",
+    "threads",
+    "status",
+    "logs",
+    "runs",
+    "prompt",
+    "stop",
+    "capacity",
+    "doctor",
+    "watch",
+    "savepoints",
+    "unwind",
+    "reset",
+    "snapshot",
+    "model",
+    "effort",
+    "approval",
+    "sandbox",
+    "cwd",
+)
 _RUNNER = CliRunner()
 
 
@@ -53,13 +74,21 @@ def test_prompt_with_both_timing_flags_exits_2() -> None:
     assert "--now" in result.output or "--next-turn" in result.output
 
 
-def test_prompt_with_now_exits_0() -> None:
+def test_prompt_with_now_exits_0(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from codexloop.infrastructure.rundir import RunDirectory, runs_root_for
+
+    RunDirectory.create(runs_root_for(tmp_path))
     result = _invoke("prompt", "hello", "--now")
     assert result.exit_code == 0
     assert "queued" in result.output.lower()
 
 
-def test_prompt_with_next_turn_exits_0() -> None:
+def test_prompt_with_next_turn_exits_0(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    from codexloop.infrastructure.rundir import RunDirectory, runs_root_for
+
+    RunDirectory.create(runs_root_for(tmp_path))
     result = _invoke("prompt", "hello", "--next-turn")
     assert result.exit_code == 0
     assert "queued" in result.output.lower()

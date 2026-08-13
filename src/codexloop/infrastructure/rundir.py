@@ -20,6 +20,8 @@ class RunDirectory:
         self.events_path = root / "events.jsonl"
         self.inbox = root / "inbox"
         self.archive = root / "archive"
+        self.savepoints_path = root / "savepoints.jsonl"
+        self.snapshots = root / "snapshots"
 
     @classmethod
     def create(cls, runs_root: Path, *, run_id: str | None = None) -> RunDirectory:
@@ -33,6 +35,11 @@ class RunDirectory:
         self.root.mkdir(parents=True, exist_ok=True)
         self.inbox.mkdir(exist_ok=True)
         self.archive.mkdir(exist_ok=True)
+        (self.inbox / "archive").mkdir(exist_ok=True)
+        (self.inbox / "quarantine").mkdir(exist_ok=True)
+        self.snapshots.mkdir(exist_ok=True)
+        if not self.savepoints_path.is_file():
+            self.savepoints_path.touch()
         if not self.meta_path.is_file():
             meta = {
                 "run_id": self.run_id,

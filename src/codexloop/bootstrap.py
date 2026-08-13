@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,9 +11,13 @@ from typing import Any
 
 from codexloop.application.ports import AgentGateway
 from codexloop.application.runner import RunnerContext
+from codexloop.application.usecases.doctor import DoctorReport, run_doctor
+from codexloop.application.usecases.run_control import enqueue_control
 from codexloop.domain.budget import Budget
+from codexloop.domain.capacity import PlanWindows
 from codexloop.domain.control import ControlCommand, Stop
 from codexloop.domain.errors import ConfigurationError
+from codexloop.domain.savepoint import SavePointRef, UnwindResult
 from codexloop.domain.session import ThreadRef
 from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
 from codexloop.infrastructure.agent.argv import ExecOpts
@@ -22,23 +27,38 @@ from codexloop.infrastructure.appserver.client import AppServerClient
 from codexloop.infrastructure.capacity_probe import CompositeCapacityProbe
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
 from codexloop.infrastructure.config import RunnerConfig, load_config
+from codexloop.infrastructure.control import CompositeRunControl, FileRunControl
+from codexloop.infrastructure.doctor_env import CodexDoctorEnvironment
+from codexloop.infrastructure.git_savepoints import GitSavePointStore
 from codexloop.infrastructure.lock import AdvisoryFileLock
 from codexloop.infrastructure.logging import configure_logging
 from codexloop.infrastructure.notify import CommandNotifier
 from codexloop.infrastructure.progress import LoggingProgressReporter
 from codexloop.infrastructure.rollout import read_rollout_rate_limits
 from codexloop.infrastructure.rundir import RunDirectory, runs_root_for
+from codexloop.infrastructure.snapshot import create_snapshot, restore_snapshot
 from codexloop.infrastructure.state import FileRunStateStore
+from codexloop.infrastructure.state_bus import read_state
 
 __all__ = [
     "DrainControl",
     "RunnerConfig",
     "build_runner",
     "current_drain",
+    "create_savepoint",
+    "enqueue_run_control",
     "list_run_records",
+    "list_savepoints",
+    "read_capacity_windows",
     "read_run_events",
     "read_run_record",
+    "read_run_state",
     "register_drain",
+    "restore_run_snapshot",
+    "run_doctor_checks",
+    "run_is_live",
+    "take_snapshot",
+    "unwind_savepoint",
 ]
 
 _ACTIVE_DRAIN: DrainControl | None = None
@@ -161,7 +181,6 @@ def build_runner(
     runs_root = runs_root_for(cwd)
     rundir: RunDirectory | None = RunDirectory.create(runs_root) if ensure_run else None
     clock = SystemClock()
-    drain = register_drain()
 
     def write_artifact(name: str, content: str) -> None:
         if rundir is None:
@@ -175,13 +194,20 @@ def build_runner(
         rollout=read_rollout_rate_limits,
     )
 
+    drain = register_drain()
+    if rundir is not None:
+        inbox = FileRunControl(rundir.inbox)
+        control: DrainControl | CompositeRunControl = CompositeRunControl(drain, inbox)
+    else:
+        control = drain
+
     return RunnerContext(
         clock=clock,
         sleeper=AnyioSleeper(clock),
         gateway=_select_gateway(transport, cwd=cwd, config=config),
         probe=probe,
         store=FileRunStateStore(runs_root),
-        control=drain,
+        control=control,
         catalog=_JsonThreadCatalog(cwd / ".codexloop" / "threads.json"),
         lock=AdvisoryFileLock(cwd / ".codexloop" / "locks"),
         write_artifact=write_artifact,
@@ -254,3 +280,125 @@ def _record_from_dir(root: Path) -> dict[str, Any]:
         if isinstance(loaded, dict):
             state = loaded
     return {"run_id": root.name, "root": str(root), "meta": meta, "state": state}
+
+
+def _run_directory(run_id: str | None = None, *, cwd: Path | None = None) -> RunDirectory:
+    record = read_run_record(run_id, cwd=cwd)
+    if record is None:
+        raise ConfigurationError("no run found — start one with `codexloop run` first")
+    directory = RunDirectory(Path(str(record["root"])))
+    directory.ensure_layout()
+    return directory
+
+
+def enqueue_run_control(
+    command: ControlCommand,
+    *,
+    run_id: str | None = None,
+    cwd: Path | None = None,
+) -> Path:
+    directory = _run_directory(run_id, cwd=cwd)
+    return enqueue_control(FileRunControl(directory.inbox), command)
+
+
+def run_doctor_checks(*, cwd: Path | None = None) -> DoctorReport:
+    root = Path.cwd() if cwd is None else cwd
+    env = CodexDoctorEnvironment(
+        app_server_live=lambda: False,
+        rollout_live=lambda: (Path.home() / ".codex").is_dir(),
+    )
+    return run_doctor(env, cwd=root)
+
+
+def read_capacity_windows(*, cwd: Path | None = None) -> PlanWindows | None:
+    del cwd
+    return read_rollout_rate_limits()
+
+
+def read_run_state(run_id: str | None = None, *, cwd: Path | None = None) -> dict[str, object]:
+    record = read_run_record(run_id, cwd=cwd)
+    if record is None:
+        return {}
+    return read_state(Path(str(record["root"])) / "state.json")
+
+
+def run_is_live(run_id: str | None = None, *, cwd: Path | None = None) -> bool:
+    record = read_run_record(run_id, cwd=cwd)
+    if record is None:
+        return False
+    meta = record.get("meta")
+    if not isinstance(meta, dict):
+        return False
+    pid = meta.get("pid")
+    if not isinstance(pid, int):
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def list_savepoints(run_id: str | None = None, *, cwd: Path | None = None) -> list[SavePointRef]:
+    root = Path.cwd() if cwd is None else cwd
+    directory = _run_directory(run_id, cwd=root)
+    store = GitSavePointStore(cwd=root, index_path=directory.savepoints_path)
+    return store.list_points(directory.run_id)
+
+
+def create_savepoint(
+    *,
+    label: str = "manual",
+    run_id: str | None = None,
+    cwd: Path | None = None,
+    attempt: int | None = None,
+    summary: str = "",
+) -> SavePointRef | None:
+    root = Path.cwd() if cwd is None else cwd
+    directory = _run_directory(run_id, cwd=root)
+    store = GitSavePointStore(cwd=root, index_path=directory.savepoints_path)
+    return store.create(
+        run_id=directory.run_id,
+        label=label,
+        attempt=attempt,
+        summary=summary,
+    )
+
+
+def unwind_savepoint(
+    to: str,
+    *,
+    run_id: str | None = None,
+    cwd: Path | None = None,
+    backup: bool = True,
+) -> UnwindResult:
+    root = Path.cwd() if cwd is None else cwd
+    directory = _run_directory(run_id, cwd=root)
+    if run_is_live(directory.run_id, cwd=root):
+        raise ConfigurationError("unwind refuses while a run is live")
+    store = GitSavePointStore(cwd=root, index_path=directory.savepoints_path)
+    return store.unwind(run_id=directory.run_id, to=to, backup=backup, live=False)
+
+
+def take_snapshot(
+    *,
+    run_id: str | None = None,
+    cwd: Path | None = None,
+    name: str | None = None,
+) -> Path:
+    root = Path.cwd() if cwd is None else cwd
+    directory = _run_directory(run_id, cwd=root)
+    stamp = name or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    dest = directory.snapshots / stamp
+    return create_snapshot(cwd=root, dest=dest)
+
+
+def restore_run_snapshot(
+    name: str,
+    *,
+    run_id: str | None = None,
+    cwd: Path | None = None,
+) -> None:
+    root = Path.cwd() if cwd is None else cwd
+    directory = _run_directory(run_id, cwd=root)
+    restore_snapshot(snapshot=directory.snapshots / name, cwd=root)
