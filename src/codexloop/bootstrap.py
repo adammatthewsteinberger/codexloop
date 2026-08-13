@@ -18,10 +18,15 @@ from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
 from codexloop.infrastructure.agent.argv import ExecOpts
 from codexloop.infrastructure.agent.gateway import CodexExecGateway
 from codexloop.infrastructure.agent.probe import ExecCapacityProbe
+from codexloop.infrastructure.appserver.client import AppServerClient
+from codexloop.infrastructure.capacity_probe import CompositeCapacityProbe
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
 from codexloop.infrastructure.config import RunnerConfig, load_config
 from codexloop.infrastructure.lock import AdvisoryFileLock
 from codexloop.infrastructure.logging import configure_logging
+from codexloop.infrastructure.notify import CommandNotifier
+from codexloop.infrastructure.progress import LoggingProgressReporter
+from codexloop.infrastructure.rollout import read_rollout_rate_limits
 from codexloop.infrastructure.rundir import RunDirectory, runs_root_for
 from codexloop.infrastructure.state import FileRunStateStore
 
@@ -163,16 +168,25 @@ def build_runner(
             return
         (rundir.root / name).write_text(content, encoding="utf-8")
 
+    app_server = AppServerClient(cwd=cwd)
+    probe = CompositeCapacityProbe(
+        ExecCapacityProbe(cwd=cwd),
+        app_server=app_server.read_rate_limits,
+        rollout=read_rollout_rate_limits,
+    )
+
     return RunnerContext(
         clock=clock,
         sleeper=AnyioSleeper(clock),
         gateway=_select_gateway(transport, cwd=cwd, config=config),
-        probe=ExecCapacityProbe(cwd=cwd),
+        probe=probe,
         store=FileRunStateStore(runs_root),
         control=drain,
         catalog=_JsonThreadCatalog(cwd / ".codexloop" / "threads.json"),
         lock=AdvisoryFileLock(cwd / ".codexloop" / "locks"),
         write_artifact=write_artifact,
+        notifier=CommandNotifier(config.notify_command),
+        reporter=LoggingProgressReporter(),
         budget=Budget(max_turns=config.max_turns, max_dollars=None, max_wall_clock=None),
         wait_policy=AdaptiveWaitPolicy(WaitConfig()),
         max_wait=config.max_wait,

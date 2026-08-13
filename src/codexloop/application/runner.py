@@ -12,6 +12,8 @@ from codexloop.application.ports import (
     AgentGateway,
     CapacityProbe,
     Clock,
+    Notifier,
+    ProgressReporter,
     RunControl,
     RunStateStore,
     SessionLock,
@@ -19,7 +21,7 @@ from codexloop.application.ports import (
     ThreadCatalog,
 )
 from codexloop.domain.budget import Budget, BudgetLedger
-from codexloop.domain.capacity import Available, CapacityState
+from codexloop.domain.capacity import Available, CapacityState, QuotaExhausted
 from codexloop.domain.classify import classify
 from codexloop.domain.completion import (
     DEFAULT_DONE_MARKER,
@@ -27,6 +29,7 @@ from codexloop.domain.completion import (
     CompletionVerdict,
     Continue,
 )
+from codexloop.domain.error_codes import ErrorClass, classify_code
 from codexloop.domain.loop import (
     BackoffUntil,
     Drain,
@@ -63,6 +66,8 @@ class RunnerContext:
     catalog: ThreadCatalog | None = None
     lock: SessionLock | None = None
     write_artifact: Callable[[str, str], None] | None = None
+    notifier: Notifier | None = None
+    reporter: ProgressReporter | None = None
     budget: Budget = field(
         default_factory=lambda: Budget(max_turns=None, max_dollars=None, max_wall_clock=None)
     )
@@ -84,6 +89,8 @@ class AutonomousRunner:
         self._catalog = ctx.catalog
         self._lock = ctx.lock
         self._write_artifact = ctx.write_artifact or _discard_artifact
+        self._notifier = ctx.notifier
+        self._reporter = ctx.reporter
         self._budget = ctx.budget
         self._wait_policy = ctx.wait_policy or AdaptiveWaitPolicy(WaitConfig(), rand=lambda: 0.0)
         self._max_wait = ctx.max_wait
@@ -93,6 +100,7 @@ class AutonomousRunner:
         self._machine = RunLoopStateMachine()
         self._evaluator = CompletionEvaluator()
         self._ledger = BudgetLedger(ctx.budget)
+        self._quota_notified = False
 
     async def run(self, selector: SessionSelector, plan: str) -> RunResult:
         thread_id = self._thread_id_from(selector)
@@ -144,6 +152,7 @@ class AutonomousRunner:
                         last_mark = self._record_elapsed(last_mark, self._clock.now())
                         self._ledger.record(turns=1, dollars=turn.cost_dollars)
                         capacity, completion = _interpret(turn, self._evaluator)
+                        self._report_unknown_code(turn)
                         if isinstance(completion, Continue) and isinstance(capacity, Available):
                             remaining = list(completion.remaining)
                         self._persist(
@@ -154,11 +163,13 @@ class AutonomousRunner:
                         )
                         self._record_thread(thread_id, started)
                         wait_attempt = 0
+                        self._quota_notified = False
                         outcome = LoopOutcome(capacity=capacity, completion=completion)
                     case Probe():
                         probed = await self._probe.probe()
                         outcome = LoopOutcome(capacity=probed.outcome)
                     case WaitUntil() | BackoffUntil():
+                        self._notify_quota_once(outcome.capacity)
                         until = self._wait_policy.next_probe_at(
                             outcome.capacity, self._clock.now(), wait_attempt, deadline
                         )
@@ -178,6 +189,7 @@ class AutonomousRunner:
                             remaining=remaining,
                             first_turn_done=not first_turn,
                             plan_text=plan_text,
+                            reason=finish.reason,
                         )
                         return RunResult(
                             success=finish.success,
@@ -242,6 +254,28 @@ class AutonomousRunner:
             self._ledger.record(elapsed=delta)
         return now
 
+    def _notify_quota_once(self, capacity: CapacityState) -> None:
+        if not isinstance(capacity, QuotaExhausted) or self._quota_notified:
+            return
+        self._quota_notified = True
+        if self._notifier is None:
+            return
+        self._notifier.notify("Quota exhausted", capacity.reason)
+
+    def _report_unknown_code(self, turn: TurnOutcome) -> None:
+        if self._reporter is None or turn.signals is None:
+            return
+        code = turn.signals.error_code
+        if code is None:
+            return
+        if classify_code(code, None) is not ErrorClass.UNKNOWN:
+            return
+        self._reporter.report(
+            "capacity.unknown_code",
+            code=code,
+            http_status=turn.signals.http_status,
+        )
+
     def _persist(
         self,
         *,
@@ -249,20 +283,21 @@ class AutonomousRunner:
         remaining: Sequence[str],
         first_turn_done: bool,
         plan_text: str,
+        reason: str | None = None,
     ) -> None:
         run_id = key or self._run_id
-        self._store.save(
-            run_id,
-            {
-                "thread_id": key,
-                "turns": self._ledger.turns,
-                "dollars": self._ledger.dollars,
-                "elapsed_seconds": self._ledger.elapsed.total_seconds(),
-                "remaining_work": list(remaining),
-                "first_turn_done": first_turn_done,
-                "plan_text": plan_text,
-            },
-        )
+        state: dict[str, object] = {
+            "thread_id": key,
+            "turns": self._ledger.turns,
+            "dollars": self._ledger.dollars,
+            "elapsed_seconds": self._ledger.elapsed.total_seconds(),
+            "remaining_work": list(remaining),
+            "first_turn_done": first_turn_done,
+            "plan_text": plan_text,
+        }
+        if reason is not None:
+            state["reason"] = reason
+        self._store.save(run_id, state)
 
     def _record_thread(self, thread_id: str | None, started: datetime) -> None:
         if self._catalog is None or thread_id is None:
