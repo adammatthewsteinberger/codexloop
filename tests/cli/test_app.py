@@ -160,14 +160,22 @@ def test_build_runner_gateway_satisfies_agent_gateway(tmp_path: Path) -> None:
     assert isinstance(ctx.gateway, AgentGateway)
 
 
-def test_build_runner_app_server_falls_back_to_exec(tmp_path: Path) -> None:
+def test_build_runner_app_server_falls_back_to_exec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from codexloop.application.ports import AgentGateway
     from codexloop.bootstrap import RunnerConfig, build_runner
     from codexloop.infrastructure.agent.gateway import CodexExecGateway
 
+    async def _fail_probe(*, cwd: Path):  # noqa: ARG001
+        return None, "app-server initialize failed; falling back to exec"
+
+    monkeypatch.setattr(
+        "codexloop.bootstrap.probe_app_server_transport",
+        _fail_probe,
+    )
     ctx = build_runner(RunnerConfig(), transport="app-server", cwd=tmp_path)
     assert isinstance(ctx.gateway, AgentGateway)
-    # Without a live app-server, capability probe falls back to exec.
     assert isinstance(ctx.gateway, CodexExecGateway)
 
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -208,10 +210,10 @@ def test_rollout_error_and_stale_paths(tmp_path: Path, monkeypatch: pytest.Monke
         is None
     )
 
-    def boom_rglob(self: Path, pattern: str) -> object:
-        raise OSError("rglob")
+    def boom_walk(*_a: object, **_k: object) -> object:
+        raise OSError("walk")
 
-    monkeypatch.setattr(Path, "rglob", boom_rglob)
+    monkeypatch.setattr(os, "walk", boom_walk)
     assert rollout_mod._newest_contained_jsonl(home) is None
     monkeypatch.undo()
 
@@ -279,17 +281,28 @@ def test_doctor_private_failure_paths() -> None:
     assert env._codex_version("codex") is None
     assert env._login_status_ok("codex") is False
     assert env._exec_help_has_flags("codex") is False
+    assert env._probe_app_server_live() is False
 
     class _Bad:
         returncode = 1
         stdout = ""
         stderr = ""
 
-    env2 = CodexDoctorEnvironment(run=lambda *_a, **_k: _Bad())
+    env2 = CodexDoctorEnvironment(
+        which=lambda _name: "/bin/codex",
+        run=lambda *_a, **_k: _Bad(),
+    )
     assert env2._codex_version("codex") is None
     assert env2._version_meets_floor(None) is False
     assert env2._version_meets_floor("nope") is False
     assert env2._version_meets_floor("codex-cli 0.0.1") is False
+    assert env2._probe_app_server_live() is False
 
-    result = _default_run(["python", "-c", "print('ok')"], timeout=5)
+    env3 = CodexDoctorEnvironment(
+        which=lambda _name: "/bin/codex",
+        run=lambda *_a, **_k: (_ for _ in ()).throw(subprocess.TimeoutExpired("codex", 1)),
+    )
+    assert env3._probe_app_server_live() is False
+
+    result = _default_run([sys.executable, "-c", "print('ok')"], timeout=5)
     assert result.returncode == 0

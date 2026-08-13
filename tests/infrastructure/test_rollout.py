@@ -310,6 +310,15 @@ def test_symlink_inside_codex_home_pointing_inside_is_allowed(tmp_path: Path) ->
     assert windows.primary.used_percent == 42.0
 
 
+def test_directory_symlink_is_not_descended(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    _write_jsonl(outside / "secret.jsonl", [_token_count_line(used_primary=99.0)])
+    home = tmp_path / "codex"
+    home.mkdir()
+    (home / "escape_dir").symlink_to(outside)
+    assert _read(home) is None
+
+
 def test_read_is_strictly_read_only(tmp_path: Path) -> None:
     home = tmp_path / "codex"
     _write_jsonl(home / "rollout.jsonl", [_token_count_line()])
@@ -324,3 +333,15 @@ def test_directory_named_jsonl_does_not_raise(tmp_path: Path) -> None:
     home = tmp_path / "codex"
     (home / "foo.jsonl").mkdir(parents=True)
     assert _read(home) is None
+
+
+def test_contained_non_file_jsonl_name_is_skipped(tmp_path: Path) -> None:
+    import os
+
+    from codexloop.infrastructure import rollout as rollout_mod
+
+    home = tmp_path / "codex"
+    home.mkdir()
+    fifo = home / "pipe.jsonl"
+    os.mkfifo(fifo)
+    assert rollout_mod._newest_contained_jsonl(home) is None

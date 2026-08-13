@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -17,6 +18,7 @@ from codexloop.infrastructure.agent.argv import ExecOpts, build_exec_argv, build
 from codexloop.infrastructure.agent.events import CodexEvent, JsonlParser, ThreadStarted, Usage
 from codexloop.infrastructure.agent.process import ProcessResult
 from codexloop.infrastructure.agent.process import run_codex as default_run_codex
+from codexloop.infrastructure.agent.schema import write_output_schema
 from codexloop.infrastructure.agent.translate import to_turn_signals
 
 _DEFAULT_TIMEOUT_S = 300.0
@@ -64,7 +66,18 @@ class CodexExecGateway:
         self._closed = False
 
     async def send_turn(self, prompt: str) -> TurnOutcome:
-        opts = replace(self._opts, prompt=prompt)
+        control = self._cwd / ".codexloop"
+        control.mkdir(parents=True, exist_ok=True)
+        schema_path = write_output_schema(control / "completion.schema.json")
+        last_message_path = control / "last-message.json"
+        if last_message_path.exists():
+            last_message_path.unlink()
+        opts = replace(
+            self._opts,
+            prompt=prompt,
+            output_schema=str(schema_path),
+            output_last_message=str(last_message_path),
+        )
         if self._thread_id is None:
             argv = build_exec_argv(opts)
         else:
@@ -85,10 +98,14 @@ class CodexExecGateway:
             stderr_tail=result.stderr_tail,
             now=self._now if self._now is not None else datetime.now(UTC),
         )
+        structured = _read_structured(last_message_path)
+        if structured is not None:
+            signals = replace(signals, structured_output=structured)
         return TurnOutcome(
             signals=signals,
             usage=_token_usage(signals.usage),
             exit_code=result.exit_code,
+            thread_id=self._thread_id,
         )
 
     async def close(self) -> None:
@@ -115,9 +132,18 @@ class CodexExecGateway:
         self._cwd = Path(path)
 
     async def set_session_resources(self, resources: Mapping[str, object]) -> None:
+        updates: dict[str, object] = {}
         add_dirs = resources.get("add_dirs")
         if isinstance(add_dirs, list | tuple) and all(isinstance(item, str) for item in add_dirs):
-            self._opts = replace(self._opts, add_dirs=tuple(add_dirs))
+            updates["add_dirs"] = tuple(add_dirs)
+        approval = resources.get("approval_policy")
+        if isinstance(approval, str):
+            updates["approval"] = ApprovalPolicy(approval)
+        sandbox = resources.get("sandbox_mode")
+        if isinstance(sandbox, str):
+            updates["sandbox"] = SandboxMode(sandbox)
+        if updates:
+            self._opts = replace(self._opts, **updates)  # type: ignore[arg-type]
 
     def resolve_tool_approval(self, request_id: str, *, allow: bool, reason: str = "") -> bool:
         _ = request_id, reason
@@ -134,6 +160,22 @@ class CodexExecGateway:
             if isinstance(event, ThreadStarted) and event.thread_id:
                 self._thread_id = event.thread_id
                 return
+
+
+def _read_structured(path: Path) -> object | None:
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    try:
+        parsed: object = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    return parsed
 
 
 def _token_usage(usage: object | None) -> TokenUsage | None:

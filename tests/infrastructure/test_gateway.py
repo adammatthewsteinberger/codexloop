@@ -201,11 +201,18 @@ async def test_set_session_resources_add_dirs_and_ignores_invalid(
     await gateway.set_session_resources({"other": ["x"]})
     assert gateway._opts.add_dirs == ()
     await gateway.set_session_resources({"add_dirs": ("/extra-a", "/extra-b")})
+    await gateway.set_session_resources(
+        {"approval_policy": "on-request", "sandbox_mode": "read-only"}
+    )
+    assert gateway._opts.approval.value == "on-request"
+    assert gateway._opts.sandbox.value == "read-only"
     await gateway.send_turn("go")
     argv = spy.argvs[0]
     assert argv.count("--add-dir") == 2
     assert "/extra-a" in argv
     assert "/extra-b" in argv
+    assert 'approval_policy="on-request"' in argv
+    assert 'sandbox_mode="read-only"' in argv
 
 
 async def test_close_after_set_is_idempotent_and_keeps_settings(
@@ -262,3 +269,85 @@ async def test_thread_started_without_id_does_not_record_and_stays_on_exec(
     assert first.exit_code == 0
     assert second.exit_code == 0
     assert gateway._thread_id is None
+
+
+async def test_send_turn_wires_output_schema_and_loads_structured_output(
+    fake_codex_on_path: Path,
+    configure_fake_codex: Callable[..., None],
+    tmp_path: Path,
+) -> None:
+    configure_fake_codex(script=JSONL / "clean_completion.jsonl", mode="stream")
+    spy = _ArgvSpy()
+    gateway = _gateway(tmp_path, run=spy)
+    last_message = tmp_path / ".codexloop" / "last-message.json"
+
+    async def _run_and_write(
+        argv: Sequence[str],
+        *,
+        cwd: str | Path,
+        env: Mapping[str, str],
+        timeout: float,
+        max_line_bytes: int,
+    ) -> ProcessResult:
+        last_message.parent.mkdir(parents=True, exist_ok=True)
+        last_message.write_text(
+            '{"complete": true, "remaining_work": []}\n',
+            encoding="utf-8",
+        )
+        return await spy(argv, cwd=cwd, env=env, timeout=timeout, max_line_bytes=max_line_bytes)
+
+    gateway = CodexExecGateway(
+        cwd=tmp_path,
+        env=_env(),
+        run_codex=_run_and_write,
+        timeout=15.0,
+        max_line_bytes=65_536,
+    )
+    outcome = await gateway.send_turn("finish")
+    argv = spy.argvs[0]
+    assert "--output-schema" in argv
+    assert "--output-last-message" in argv
+    assert outcome.signals is not None
+    assert outcome.signals.structured_output == {
+        "complete": True,
+        "remaining_work": [],
+    }
+
+
+def test_read_structured_handles_missing_empty_and_non_json(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock
+
+    from codexloop.infrastructure.agent.gateway import _read_structured
+
+    missing = tmp_path / "nope.json"
+    assert _read_structured(missing) is None
+
+    empty = tmp_path / "empty.json"
+    empty.write_text("   \n", encoding="utf-8")
+    assert _read_structured(empty) is None
+
+    plain = tmp_path / "plain.json"
+    plain.write_text("not-json\n", encoding="utf-8")
+    assert _read_structured(plain) == "not-json"
+
+    boom = MagicMock()
+    boom.is_file.return_value = True
+    boom.read_text.side_effect = OSError("boom")
+    assert _read_structured(boom) is None
+
+
+async def test_send_turn_unlinks_stale_last_message(
+    fake_codex_on_path: Path,
+    configure_fake_codex: Callable[..., None],
+    tmp_path: Path,
+) -> None:
+    configure_fake_codex(script=JSONL / "clean_completion.jsonl", mode="stream")
+    control = tmp_path / ".codexloop"
+    control.mkdir(parents=True)
+    stale = control / "last-message.json"
+    stale.write_text('{"complete": false}\n', encoding="utf-8")
+    gateway = _gateway(tmp_path)
+    await gateway.send_turn("go")
+    # Fresh turn clears then rewrites only if the CLI produced output; after a clean
+    # fake stream with no last-message write, the stale file must be gone.
+    assert not stale.exists() or stale.read_text(encoding="utf-8") != '{"complete": false}\n'

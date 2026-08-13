@@ -521,3 +521,122 @@ async def test_done_looking_capacity_rejected_turn_waits(error_code: str) -> Non
 
     assert result.success is not True
     assert sleeper.requested
+
+
+async def test_fatal_error_code_fails_run_without_burning_budget() -> None:
+    ctx, gateway, *_ = make_ctx(
+        outcomes=[
+            TurnOutcome(
+                thread_id=THREAD_ID,
+                signals=TurnSignals(
+                    error_code="context_length_exceeded",
+                    http_status=400,
+                    failed=True,
+                ),
+            ),
+            _done(),
+        ],
+        budget=Budget(max_turns=5, max_dollars=None, max_wall_clock=None),
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is False
+    assert result.reason == "context_length_exceeded"
+    assert result.turns == 1
+    assert gateway.sent_prompts == [PLAN]
+
+
+async def test_failed_turn_without_capacity_code_is_blocked() -> None:
+    ctx, gateway, *_ = make_ctx(
+        outcomes=[
+            TurnOutcome(
+                thread_id=THREAD_ID,
+                signals=TurnSignals(failed=True, final_message="boom"),
+            ),
+            _done(),
+        ]
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is False
+    assert result.reason == "turn_failed"
+    assert gateway.sent_prompts == [PLAN]
+
+
+async def test_mid_run_controls_reach_gateway() -> None:
+    from codexloop.application.ports import PermissionMode
+    from codexloop.domain.approval import ApprovalPolicy, SandboxMode
+    from codexloop.domain.control import (
+        Prompt,
+        PromptTiming,
+        ResourceMutate,
+        SetApproval,
+        SetCwd,
+        SetEffort,
+        SetModel,
+        SetSandbox,
+        Snapshot,
+    )
+    from codexloop.domain.model_profile import Effort
+
+    artifacts: dict[str, str] = {}
+    control = FakeRunControl(
+        script=[
+            [],
+            [
+                SetModel(model="o3"),
+                SetEffort(effort=Effort.HIGH),
+                SetApproval(policy=ApprovalPolicy.ON_REQUEST),
+                SetSandbox(sandbox=SandboxMode.READ_ONLY),
+                SetCwd(cwd="/tmp/work"),
+                ResourceMutate(payload={"add_dirs": ["/extra"]}),
+                Snapshot(),
+                Prompt(text="operator nudge", timing=PromptTiming.NEXT_TURN),
+            ],
+        ]
+    )
+    ctx, gateway, *_ = make_ctx(
+        outcomes=[_continue(["x"]), _done()],
+        control=control,
+        write_artifact=artifacts.__setitem__,
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is True
+    assert gateway.profiles[-1].model == "o3"
+    assert gateway.profiles[-1].effort is Effort.HIGH
+    assert PermissionMode.READ_ONLY in gateway.permission_modes
+    assert gateway.cwds == ["/tmp/work"]
+    assert any(item.get("add_dirs") == ["/extra"] for item in gateway.resource_updates)
+    assert "snapshot.json" in artifacts
+    assert gateway.sent_prompts[1] == "operator nudge"
+
+
+async def test_full_access_sandbox_control_maps_permission_mode() -> None:
+    from codexloop.application.ports import PermissionMode
+    from codexloop.domain.approval import SandboxMode
+    from codexloop.domain.control import SetSandbox
+
+    control = FakeRunControl(script=[[SetSandbox(sandbox=SandboxMode.DANGER_FULL_ACCESS)], []])
+    ctx, gateway, *_ = make_ctx(outcomes=[_done()], control=control)
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+    assert result.success is True
+    assert PermissionMode.FULL_ACCESS in gateway.permission_modes
+
+
+async def test_fatal_error_type_alone_blocks_run() -> None:
+    ctx, gateway, *_ = make_ctx(
+        outcomes=[
+            TurnOutcome(
+                thread_id=THREAD_ID,
+                signals=TurnSignals(error_type="invalid_prompt", failed=False),
+            )
+        ]
+    )
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+    assert result.success is False
+    assert result.reason == "invalid_prompt"
+    assert gateway.sent_prompts == [PLAN]

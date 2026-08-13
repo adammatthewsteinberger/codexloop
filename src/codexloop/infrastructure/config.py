@@ -22,7 +22,9 @@ _DURATION = re.compile(
 
 @dataclass(frozen=True, slots=True)
 class RunnerConfig:
-    model: str = "gpt-5"
+    """Runtime knobs. ``model=None`` leaves model selection to the Codex CLI."""
+
+    model: str | None = None
     max_turns: int = 100
     json_logs: bool = False
     max_wait: timedelta = timedelta(hours=24)

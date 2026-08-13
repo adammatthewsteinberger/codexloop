@@ -104,7 +104,11 @@ class CodexDoctorEnvironment:
 
         strategies = {
             "exec": True,
-            "app-server": self._app_server_live() if self._app_server_live else False,
+            "app-server": (
+                self._app_server_live()
+                if self._app_server_live is not None
+                else self._probe_app_server_live()
+            ),
             "rollout": self._rollout_live() if self._rollout_live else False,
         }
         checks.append(
@@ -199,6 +203,20 @@ class CodexDoctorEnvironment:
         if auth.is_file():
             return "chatgpt_plan"
         return "none"
+
+    def _probe_app_server_live(self) -> bool:
+        """Return True when ``codex app-server --help`` succeeds (cheap live probe)."""
+        codex = self._which("codex")
+        if codex is None:
+            return False
+        try:
+            result = self._run([codex, "app-server", "--help"], timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        if result.returncode != 0:
+            return False
+        text = f"{result.stdout}\n{result.stderr}".lower()
+        return "stdio" in text or "app-server" in text
 
 
 def _default_run(

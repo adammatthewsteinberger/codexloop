@@ -6,6 +6,8 @@ import shlex
 import subprocess  # nosec B404 — argv list from operator config, never shell=True
 from collections.abc import Sequence
 
+from codexloop.infrastructure.redact import redact_string
+
 
 class CommandNotifier:
     def __init__(self, command: str | Sequence[str] | None = None) -> None:
@@ -13,8 +15,13 @@ class CommandNotifier:
         self.noop_notifications: list[tuple[str, str]] = []
 
     def notify(self, title: str, body: str) -> None:
+        safe_title = redact_string(title)
+        safe_body = redact_string(body)
         if not self._command:
-            self.noop_notifications.append((title, body))
+            self.noop_notifications.append((safe_title, safe_body))
             return
         argv = shlex.split(self._command) if isinstance(self._command, str) else list(self._command)
-        subprocess.run([*argv, title, body], check=False)  # nosec B603 — no shell; operator-configured argv
+        subprocess.run(  # nosec B603 — no shell; operator-configured argv
+            [*argv, safe_title, safe_body],
+            check=False,
+        )

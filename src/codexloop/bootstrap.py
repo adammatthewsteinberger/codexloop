@@ -262,7 +262,7 @@ def build_runner(
         max_wait=config.max_wait,
         run_id=rundir.run_id if rundir is not None else "anonymous",
         cwd=str(cwd),
-        model=config.model,
+        model=config.model or "codex-default",
     )
 
 
@@ -348,7 +348,6 @@ def enqueue_run_control(
 def run_doctor_checks(*, cwd: Path | None = None) -> DoctorReport:
     root = Path.cwd() if cwd is None else cwd
     env = CodexDoctorEnvironment(
-        app_server_live=lambda: False,
         rollout_live=lambda: (Path.home() / ".codex").is_dir(),
     )
     return run_doctor(env, cwd=root)

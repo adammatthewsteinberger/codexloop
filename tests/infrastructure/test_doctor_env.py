@@ -72,3 +72,82 @@ def test_doctor_fails_when_codex_missing(tmp_path: Path) -> None:
     report = env.diagnose(cwd=tmp_path)
     assert report.auth_mode == "none"
     assert any(c.name == "codex-cli" and not c.passed for c in report.checks)
+
+
+def test_doctor_probes_app_server_help_when_live_hook_omitted(tmp_path: Path) -> None:
+    def which(name: str) -> str | None:
+        return "/bin/codex" if name == "codex" else None
+
+    def run(argv: list[str], *, timeout: float = 10) -> _Proc:
+        del timeout
+        if argv[1:] == ["--version"]:
+            return _Proc(0, "codex-cli 0.50.0")
+        if argv[1:] == ["login", "status"]:
+            return _Proc(0, "logged in")
+        if argv[1:] == ["exec", "--help"]:
+            return _Proc(0, "Usage: --json --ephemeral -c key=value")
+        if argv[1:] == ["app-server", "--help"]:
+            return _Proc(0, "Usage: codex app-server --stdio")
+        return _Proc(1, "")
+
+    env = CodexDoctorEnvironment(
+        environ={"OPENAI_API_KEY": "sk-test"},
+        which=which,
+        run=run,  # type: ignore[arg-type]
+        home=tmp_path,
+        rollout_live=lambda: False,
+        mcp_servers=lambda: (),
+    )
+    (tmp_path / ".git").mkdir()
+    report = env.diagnose(cwd=tmp_path)
+    assert report.probe_strategies["app-server"] is True
+
+
+def test_doctor_app_server_probe_handles_failures(tmp_path: Path) -> None:
+    def which(name: str) -> str | None:
+        return "/bin/codex" if name == "codex" else None
+
+    def run_fail(argv: list[str], *, timeout: float = 10) -> _Proc:
+        del timeout
+        if argv[1:] == ["app-server", "--help"]:
+            return _Proc(1, "")
+        if argv[1:] == ["--version"]:
+            return _Proc(0, "codex-cli 0.50.0")
+        if argv[1:] == ["login", "status"]:
+            return _Proc(0, "logged in")
+        if argv[1:] == ["exec", "--help"]:
+            return _Proc(0, "Usage: --json --ephemeral -c key=value")
+        return _Proc(1, "")
+
+    env = CodexDoctorEnvironment(
+        environ={"OPENAI_API_KEY": "sk-test"},
+        which=which,
+        run=run_fail,  # type: ignore[arg-type]
+        home=tmp_path,
+        rollout_live=lambda: False,
+        mcp_servers=lambda: (),
+    )
+    (tmp_path / ".git").mkdir()
+    assert env.diagnose(cwd=tmp_path).probe_strategies["app-server"] is False
+
+    def run_timeout(argv: list[str], *, timeout: float = 10) -> _Proc:
+        del timeout
+        if argv[1:] == ["app-server", "--help"]:
+            raise subprocess.TimeoutExpired(argv, 1)
+        if argv[1:] == ["--version"]:
+            return _Proc(0, "codex-cli 0.50.0")
+        if argv[1:] == ["login", "status"]:
+            return _Proc(0, "logged in")
+        if argv[1:] == ["exec", "--help"]:
+            return _Proc(0, "Usage: --json --ephemeral -c key=value")
+        return _Proc(1, "")
+
+    env_timeout = CodexDoctorEnvironment(
+        environ={"OPENAI_API_KEY": "sk-test"},
+        which=which,
+        run=run_timeout,  # type: ignore[arg-type]
+        home=tmp_path,
+        rollout_live=lambda: False,
+        mcp_servers=lambda: (),
+    )
+    assert env_timeout.diagnose(cwd=tmp_path).probe_strategies["app-server"] is False

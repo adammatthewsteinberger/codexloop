@@ -193,7 +193,12 @@ class CodexAppServerGateway:
         self._cwd = Path(path)
 
     async def set_session_resources(self, resources: Mapping[str, object]) -> None:
-        del resources
+        approval = resources.get("approval_policy")
+        if isinstance(approval, str):
+            self._approval = ApprovalPolicy(approval)
+        sandbox = resources.get("sandbox_mode")
+        if isinstance(sandbox, str):
+            self._sandbox = SandboxMode(sandbox)
 
     def resolve_tool_approval(self, request_id: str, *, allow: bool, reason: str = "") -> bool:
         del request_id, reason

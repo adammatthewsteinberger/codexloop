@@ -167,6 +167,44 @@ def test_watch_replay_opens_stream_ui(tmp_path: Path, monkeypatch: pytest.Monkey
     assert len(seen) == 1
 
 
+def test_watch_follow_prints_updates_then_exits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_run(tmp_path, monkeypatch)
+    states = iter(
+        [
+            {"phase": "running"},
+            {"phase": "running"},
+            {"phase": "done"},
+        ]
+    )
+    live = iter([True, True, False])
+
+    monkeypatch.setattr(
+        "codexloop.cli.commands.watch.read_run_state",
+        lambda run_id=None: next(states),
+    )
+    monkeypatch.setattr(
+        "codexloop.cli.commands.watch.run_is_live",
+        lambda run_id=None: next(live),
+    )
+    monkeypatch.setattr("codexloop.cli.commands.watch.time.sleep", lambda _s: None)
+    result = _invoke("watch", "--follow", "--interval", "0.1")
+    assert result.exit_code == 0
+    assert result.output.count("running") >= 1
+    assert "done" in result.output
+
+
+def test_watch_follow_exits_when_no_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("codexloop.cli.commands.watch.read_run_state", lambda run_id=None: {})
+    monkeypatch.setattr("codexloop.cli.commands.watch.run_is_live", lambda run_id=None: False)
+    monkeypatch.setattr("codexloop.cli.commands.watch.time.sleep", lambda _s: None)
+    result = _invoke("watch", "--follow")
+    assert result.exit_code == 1
+    assert "no run state" in result.output
+
+
 def test_effort_approval_sandbox_cwd_queue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rundir = _seed_run(tmp_path, monkeypatch)
     assert _invoke("effort", "high").exit_code == 0

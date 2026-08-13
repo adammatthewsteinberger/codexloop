@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -48,24 +49,32 @@ def _read(
 
 
 def _newest_contained_jsonl(root: Path) -> Path | None:
+    """Pick the newest ``*.jsonl`` under ``root`` without following dir symlinks."""
     newest: Path | None = None
     newest_mtime = float("-inf")
     try:
-        matches = root.rglob("*.jsonl")
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+            # Do not descend into symlinked directories (os.walk still lists them).
+            dirnames[:] = [name for name in dirnames if not Path(dirpath, name).is_symlink()]
+            for name in filenames:
+                if not name.endswith(".jsonl"):
+                    continue
+                path = Path(dirpath) / name
+                # File symlinks are allowed only when the target stays under root.
+                if not _contained(path, root):
+                    continue
+                try:
+                    target = path.resolve() if path.is_symlink() else path
+                    if not target.is_file():
+                        continue
+                    mtime = target.stat().st_mtime
+                except OSError:  # pragma: no cover
+                    continue
+                if mtime >= newest_mtime:
+                    newest = target
+                    newest_mtime = mtime
     except OSError:
         return None
-    for path in matches:
-        if not _contained(path, root):
-            continue
-        try:
-            if not path.is_file():
-                continue
-            mtime = path.stat().st_mtime
-        except OSError:  # pragma: no cover
-            continue
-        if mtime >= newest_mtime:
-            newest = path
-            newest_mtime = mtime
     return newest
 
 

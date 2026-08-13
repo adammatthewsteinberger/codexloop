@@ -12,6 +12,8 @@ from codexloop.domain.errors import ConfigurationError
 from codexloop.infrastructure.config import RunnerConfig, load_config
 from codexloop.infrastructure.notify import CommandNotifier
 
+_SK = "sk-abcdefghijklmnopqrstuvwxyz0123"
+
 _USER_TOML = """\
 model = "user-model"
 max_turns = 10
@@ -42,7 +44,7 @@ def _write_configs(tmp_path: Path) -> tuple[Path, Path]:
 def test_defaults_when_nothing_is_set(tmp_path: Path) -> None:
     config = load_config(cwd=tmp_path, home=tmp_path, environ={})
     assert config == RunnerConfig()
-    assert config.model == "gpt-5"
+    assert config.model is None
     assert config.max_turns == 100
     assert config.json_logs is False
     assert config.max_wait == timedelta(hours=24)
@@ -174,6 +176,14 @@ def test_command_notifier_records_noop_when_unset() -> None:
     notifier = CommandNotifier(None)
     notifier.notify("title", "body")
     assert notifier.noop_notifications == [("title", "body")]
+
+
+def test_command_notifier_redacts_secret_shaped_text() -> None:
+    notifier = CommandNotifier(None)
+    notifier.notify(f"tok={_SK}", "ok")
+    title, body = notifier.noop_notifications[0]
+    assert _SK not in title
+    assert body == "ok"
 
 
 def test_command_notifier_runs_configured_command(tmp_path: Path) -> None:

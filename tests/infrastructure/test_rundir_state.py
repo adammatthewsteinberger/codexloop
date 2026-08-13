@@ -64,6 +64,20 @@ def test_file_run_state_store_roundtrip(tmp_path: Path) -> None:
     }
 
 
+def test_file_run_state_store_redacts_secrets(tmp_path: Path) -> None:
+    runs_root = runs_root_for(tmp_path)
+    directory = RunDirectory.create(runs_root)
+    store = FileRunStateStore(runs_root)
+    store.save(
+        directory.run_id,
+        {"phase": "turn", "secret_value": "super-secret", "note": _SK_TOKEN},
+    )
+    raw = json.loads(directory.state_path.read_text(encoding="utf-8"))
+    assert raw["secret_value"] == REDACTED_VALUE
+    assert _SK_TOKEN not in raw["note"]
+    assert REDACTED_VALUE in raw["note"]
+
+
 def test_state_store_non_object_json_is_none(tmp_path: Path) -> None:
     runs_root = tmp_path / "runs"
     run = runs_root / "rid"

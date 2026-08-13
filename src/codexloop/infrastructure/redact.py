@@ -15,6 +15,10 @@ _REDACTED_KEYS = frozenset(
         "refresh_token",
         "client_secret",
         "api_key",
+        "secret_value",
+        "secret",
+        "password",
+        "token",
     }
 )
 

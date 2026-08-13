@@ -13,6 +13,7 @@ from codexloop.application.ports import (
     CapacityProbe,
     Clock,
     Notifier,
+    PermissionMode,
     ProgressReporter,
     RunControl,
     RunStateStore,
@@ -20,14 +21,28 @@ from codexloop.application.ports import (
     Sleeper,
     ThreadCatalog,
 )
+from codexloop.domain.approval import ApprovalPolicy, SandboxMode
 from codexloop.domain.budget import Budget, BudgetLedger
 from codexloop.domain.capacity import Available, CapacityState, QuotaExhausted
 from codexloop.domain.classify import classify
 from codexloop.domain.completion import (
     DEFAULT_DONE_MARKER,
+    Blocked,
     CompletionEvaluator,
     CompletionVerdict,
     Continue,
+)
+from codexloop.domain.control import (
+    ControlCommand,
+    Prompt,
+    ResourceMutate,
+    SetApproval,
+    SetCwd,
+    SetEffort,
+    SetModel,
+    SetSandbox,
+    Snapshot,
+    Stop,
 )
 from codexloop.domain.error_codes import ErrorClass, classify_code
 from codexloop.domain.loop import (
@@ -41,8 +56,10 @@ from codexloop.domain.loop import (
     SendTurn,
     WaitUntil,
 )
+from codexloop.domain.model_profile import Effort, ModelEffortProfile
 from codexloop.domain.plan import WorkPlan
 from codexloop.domain.session import Explicit, MostRecent, PlanFile, SessionSelector, ThreadRef
+from codexloop.domain.signals import TurnSignals
 from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
 
 _FAR_FUTURE = timedelta(days=3650)
@@ -76,6 +93,7 @@ class RunnerContext:
     run_id: str = "anonymous"
     cwd: str = "."
     model: str = "unknown"
+    effort: Effort = Effort.MEDIUM
 
 
 class AutonomousRunner:
@@ -97,10 +115,14 @@ class AutonomousRunner:
         self._run_id = ctx.run_id
         self._cwd = ctx.cwd
         self._model = ctx.model
+        self._effort = ctx.effort
+        self._approval = ApprovalPolicy.NEVER
+        self._sandbox = SandboxMode.WORKSPACE_WRITE
         self._machine = RunLoopStateMachine()
         self._evaluator = CompletionEvaluator()
         self._ledger = BudgetLedger(ctx.budget)
         self._quota_notified = False
+        self._queued_prompt: str | None = None
 
     async def run(self, selector: SessionSelector, plan: str) -> RunResult:
         thread_id = self._thread_id_from(selector)
@@ -127,6 +149,7 @@ class AutonomousRunner:
         try:
             while True:
                 controls = list(self._control.poll())
+                await self._apply_controls(controls)
                 now = self._clock.now()
                 last_mark = self._record_elapsed(last_mark, now)
 
@@ -143,7 +166,8 @@ class AutonomousRunner:
 
                 match decision:
                     case SendTurn():
-                        prompt = plan_text if first_turn else _continuation(remaining)
+                        default = plan_text if first_turn else _continuation(remaining)
+                        prompt = self._take_prompt(default)
                         first_turn = False
                         turn = await self._gateway.send_turn(prompt)
                         if turn.thread_id:
@@ -203,6 +227,60 @@ class AutonomousRunner:
             if locked_id is not None and self._lock is not None:
                 self._lock.release(locked_id)
             await self._gateway.close()
+
+    async def _apply_controls(self, controls: Sequence[ControlCommand]) -> None:
+        for command in controls:
+            match command:
+                case Stop():
+                    continue
+                case Prompt(text=text):
+                    self._queued_prompt = text
+                case SetModel(model=model):
+                    self._model = model
+                    profile = ModelEffortProfile(model=model, effort=self._effort)
+                    await self._gateway.set_profile(profile)
+                case SetEffort(effort=effort):
+                    self._effort = effort
+                    await self._gateway.set_profile(
+                        ModelEffortProfile(model=self._model, effort=effort)
+                    )
+                case SetApproval(policy=policy):
+                    self._approval = policy
+                    await self._sync_permissions()
+                case SetSandbox(sandbox=sandbox):
+                    self._sandbox = sandbox
+                    await self._sync_permissions()
+                case SetCwd(cwd=cwd):
+                    self._cwd = cwd
+                    await self._gateway.set_cwd(cwd)
+                case Snapshot():
+                    self._write_artifact(
+                        "snapshot.json",
+                        (
+                            f'{{"run_id":"{self._run_id}","model":"{self._model}",'
+                            f'"effort":"{self._effort.value}","cwd":"{self._cwd}"}}\n'
+                        ),
+                    )
+                case ResourceMutate(payload=payload):
+                    await self._gateway.set_session_resources(payload)
+                case _:  # pragma: no cover — ControlCommand is a closed union
+                    assert_never(command)
+
+    async def _sync_permissions(self) -> None:
+        await self._gateway.set_permission_mode(_permission_mode(self._sandbox))
+        await self._gateway.set_session_resources(
+            {
+                "approval_policy": self._approval.value,
+                "sandbox_mode": self._sandbox.value,
+            }
+        )
+
+    def _take_prompt(self, default: str) -> str:
+        if self._queued_prompt is None:
+            return default
+        prompt = self._queued_prompt
+        self._queued_prompt = None
+        return prompt
 
     def _thread_id_from(self, selector: SessionSelector) -> str | None:
         match selector:
@@ -324,6 +402,18 @@ class AutonomousRunner:
         self._write_artifact("stop-summary.md", body)
 
 
+def _permission_mode(sandbox: SandboxMode) -> PermissionMode:
+    match sandbox:
+        case SandboxMode.READ_ONLY:
+            return PermissionMode.READ_ONLY
+        case SandboxMode.DANGER_FULL_ACCESS:
+            return PermissionMode.FULL_ACCESS
+        case SandboxMode.WORKSPACE_WRITE:
+            return PermissionMode.AUTONOMOUS
+        case _:  # pragma: no cover — exhaustive StrEnum
+            assert_never(sandbox)
+
+
 def _continuation(remaining: Sequence[str]) -> str:
     if remaining:
         items = "\n".join(f"- {name}" for name in remaining)
@@ -343,7 +433,23 @@ def _interpret(
     if turn.signals is None:
         return Available(), Continue(remaining=[])
     capacity = classify(turn.signals)
-    return capacity, evaluator.evaluate(turn.signals, capacity)
+    completion = evaluator.evaluate(turn.signals, capacity)
+    if isinstance(capacity, Available) and _is_fatal_turn(turn.signals):
+        reason = (
+            turn.signals.error_code
+            or turn.signals.error_type
+            or ("turn_failed" if turn.signals.failed else "fatal")
+        )
+        return capacity, Blocked(reason=reason)
+    return capacity, completion
+
+
+def _is_fatal_turn(signals: TurnSignals) -> bool:
+    if classify_code(signals.error_code, None) is ErrorClass.FATAL:
+        return True
+    if classify_code(None, signals.error_type) is ErrorClass.FATAL:
+        return True
+    return signals.failed
 
 
 def _int_field(value: object) -> int:

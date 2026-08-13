@@ -6,6 +6,8 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
+from codexloop.infrastructure.redact import redact
+
 
 class FileRunStateStore:
     def __init__(self, runs_root: Path) -> None:
@@ -26,4 +28,5 @@ class FileRunStateStore:
     def save(self, run_id: str, state: Mapping[str, object]) -> None:
         path = self._path(run_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(dict(state), default=str) + "\n", encoding="utf-8")
+        safe = redact(dict(state))
+        path.write_text(json.dumps(safe, default=str) + "\n", encoding="utf-8")

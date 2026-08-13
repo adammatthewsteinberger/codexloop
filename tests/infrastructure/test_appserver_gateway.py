@@ -142,6 +142,11 @@ async def test_permission_profile_and_close(tmp_path: Path) -> None:
         await gw.set_permission_mode(PermissionMode.FULL_ACCESS)
         await gw.set_permission_mode(PermissionMode.AUTONOMOUS)
         await gw.set_cwd(str(tmp_path))
+        await gw.set_session_resources(
+            {"approval_policy": "on-request", "sandbox_mode": "read-only"}
+        )
+        assert gw._approval.value == "on-request"  # noqa: SLF001
+        assert gw._sandbox.value == "read-only"  # noqa: SLF001
         await gw.set_session_resources({})
         assert gw.resolve_tool_approval("x", allow=True) is True
         await gw.close()

@@ -101,7 +101,12 @@ def _merge_error(
     extra = getattr(error, "retry_after_s", None)
     if isinstance(extra, int | float) and not isinstance(extra, bool):
         retry_after_s = float(extra)
-    return error.code, error.type, error.status, retry_after_s
+    return (
+        error.code if error.code is not None else error_code,
+        error.type if error.type is not None else error_type,
+        error.status if error.status is not None else http_status,
+        retry_after_s,
+    )
 
 
 def _agent_message_text(item: Mapping[str, object] | None) -> str | None:

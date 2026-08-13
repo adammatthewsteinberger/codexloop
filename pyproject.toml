@@ -152,4 +152,24 @@ allow_indirect_imports = true
 name = "Domain is pure"
 type = "forbidden"
 source_modules = ["codexloop.domain"]
-forbidden_modules = ["openai", "anyio", "structlog", "typer", "textual", "httpx"]
+forbidden_modules = [
+    "openai",
+    "anyio",
+    "structlog",
+    "typer",
+    "textual",
+    "httpx",
+    "anthropic",
+    "claude_agent_sdk",
+    "claudeloop",
+    "pydantic",
+    "click",
+    "rich",
+    "requests",
+    "aiohttp",
+    "fastapi",
+    "flask",
+    "boto3",
+    "docker",
+    "sqlalchemy",
+]

@@ -1,8 +1,29 @@
 # codexloop
 
-Autonomous OpenAI Codex / GPT session runner. Same job as [claudeloop](https://github.com/adammatthewsteinberger/claudeloop): never block on a human, and never treat `insufficient_quota` / billing as a waitable `rate_limit_exceeded` window.
+Autonomous OpenAI Codex / GPT session runner. Same job as
+[claudeloop](https://github.com/adammatthewsteinberger/claudeloop): never block on
+a human, and never treat `insufficient_quota` / billing as a waitable
+`rate_limit_exceeded` window.
 
-**Status:** package skeleton and quality gates are in place (`codexloop --version` works). Domain logic is not implemented yet; see the plans table.
+**Status:** M1–M5 implemented on `feat/m1-pure-core` (onion core, exec gateway,
+capacity probes, control plane, generated REST CLI, optional app-server transport
+with exec fallback). MIT-licensed; author Adam Matthew Steinberger.
+
+## Install
+
+```bash
+pip install -e ".[dev]"
+codexloop --version
+codexloop doctor
+```
+
+## Quick start
+
+```bash
+codexloop run path/to/plan.md
+codexloop watch --follow
+codexloop stop
+```
 
 ## Plans
 
@@ -21,3 +42,7 @@ Autonomous OpenAI Codex / GPT session runner. Same job as [claudeloop](https://g
 | Env prefix | `CODEXLOOP_*` |
 | State dir | `.codexloop/` |
 | Done marker | `CODEXLOOP_TASK_FULLY_COMPLETE` |
+
+## License
+
+MIT — see [LICENSE](LICENSE).
