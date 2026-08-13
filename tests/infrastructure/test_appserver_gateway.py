@@ -148,3 +148,63 @@ async def test_permission_profile_and_close(tmp_path: Path) -> None:
         await gw.close()  # idempotent
     finally:
         await gw.close()
+
+
+async def test_interrupt_steer_noop_without_pending(tmp_path: Path) -> None:
+    gw = _gateway(tmp_path)
+    try:
+        await gw.interrupt_turn()
+        await gw.steer_turn("x")
+        assert "turn/interrupt" not in _methods(tmp_path)
+    finally:
+        await gw.close()
+
+
+async def test_handle_notification_variants(tmp_path: Path) -> None:
+    gw = _gateway(tmp_path)
+    gw._pending = _PendingTurn()  # noqa: SLF001
+    assert await gw._handle_notification({"method": 1}) is False  # noqa: SLF001
+    assert await gw._handle_notification({"method": "unknown"}) is False  # noqa: SLF001
+    assert (
+        await gw._handle_notification(  # noqa: SLF001
+            {"method": "turn.started", "params": {"turnId": "t9"}}
+        )
+        is True
+    )
+    assert gw._pending.turn_id == "t9"  # noqa: SLF001
+    await gw._handle_notification(  # noqa: SLF001
+        {"method": "turn/outputDelta", "params": {"text": "ab"}}
+    )
+    assert gw._pending.final_message == "ab"  # noqa: SLF001
+    await gw._handle_notification(  # noqa: SLF001
+        {"method": "turn.completed", "params": {"message": "done"}}
+    )
+    assert gw._pending.completed is True  # noqa: SLF001
+    assert gw._pending.final_message == "done"  # noqa: SLF001
+    gw._pending = _PendingTurn()  # noqa: SLF001
+    await gw._handle_notification({"method": "turn.failed", "params": {}})  # noqa: SLF001
+    assert gw._pending.failed is True  # noqa: SLF001
+    assert gw._pending.error_code == "turn_failed"  # noqa: SLF001
+
+
+async def test_rpc_error_and_blank_line_reader(tmp_path: Path) -> None:
+    from codexloop.infrastructure.appserver.gateway import _LineReader, _rpc_error
+
+    assert _rpc_error({"error": {"code": 1}}) == {"code": 1}
+    assert _rpc_error({"error": "boom"}) == {"message": "boom"}
+    assert _rpc_error({}) is None
+
+    class _Stream:
+        def __init__(self, chunks: list[bytes]) -> None:
+            self._chunks = list(chunks)
+
+        async def receive(self, _n: int) -> bytes:
+            if not self._chunks:
+                from anyio import EndOfStream
+
+                raise EndOfStream
+            return self._chunks.pop(0)
+
+    reader = _LineReader(_Stream([b"\n", b'{"id":1,"result":{}}\n']))  # type: ignore[arg-type]
+    assert await reader.read_line() == {"id": 1, "result": {}}
+    assert await reader.read_line() is None

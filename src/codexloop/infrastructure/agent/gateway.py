@@ -107,7 +107,7 @@ class CodexExecGateway:
                 approval, sandbox = ApprovalPolicy.NEVER, SandboxMode.READ_ONLY
             case PermissionMode.FULL_ACCESS:
                 approval, sandbox = ApprovalPolicy.NEVER, SandboxMode.DANGER_FULL_ACCESS
-            case _:
+            case _:  # pragma: no cover — exhaustive StrEnum
                 assert_never(mode)
         self._opts = replace(self._opts, approval=approval, sandbox=sandbox)
 

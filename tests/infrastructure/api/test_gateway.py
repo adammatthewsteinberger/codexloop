@@ -54,6 +54,41 @@ def test_invoke_paginates_list(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == [{"id": "a"}, {"id": "b"}]
 
 
+def test_collect_paginated_without_cap() -> None:
+    page = _FakePage([1], has_more=True, next_data=[2, 3])
+    assert _collect_paginated(page, max_items=None) == [1, 2, 3]
+
+
+def test_collect_paginated_non_list_data() -> None:
+    class _Page:
+        data = None
+        has_more = False
+
+    assert _collect_paginated(_Page(), max_items=1) == []
+
+
+def test_invoke_rejects_disallowed_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    gw = OpenAIApiGateway()
+    monkeypatch.setattr(
+        "codexloop.infrastructure.api.gateway.surface_roots_for_provider",
+        lambda provider: ("models",),
+    )
+    monkeypatch.setattr(
+        "codexloop.infrastructure.api.gateway.discover_surface",
+        lambda **k: [
+            EndpointSpec(
+                resource_path=("models",),
+                method_name="list",
+                signature="(self)",
+                is_list=True,
+                is_streaming=False,
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="not available"):
+        gw.invoke("chat.completions.create", provider="openai")
+
+
 def test_invoke_and_print_json(monkeypatch: pytest.MonkeyPatch) -> None:
     class _Obj:
         def model_dump(self) -> dict[str, str]:
@@ -100,6 +135,53 @@ def test_gateway_rejects_method_outside_provider_roots(
     gw = OpenAIApiGateway()
     with pytest.raises(ValueError, match="not available"):
         gw.invoke("models.list", provider="openai")
+
+
+def test_gateway_allows_method_inside_restricted_roots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _List:
+        def list(self, **kwargs: Any) -> list[str]:
+            del kwargs
+            return ["ok"]
+
+    class _Client:
+        def __init__(self) -> None:
+            self.models = _List()
+
+    monkeypatch.setattr(
+        "codexloop.infrastructure.api.gateway.surface_roots_for_provider",
+        lambda provider: ("models",),
+    )
+    monkeypatch.setattr(
+        "codexloop.infrastructure.api.gateway.discover_surface",
+        lambda **k: [
+            EndpointSpec(
+                resource_path=("models",),
+                method_name="list",
+                signature="(self)",
+                is_list=True,
+                is_streaming=False,
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "codexloop.infrastructure.api.gateway.build_client",
+        lambda *a, **k: _Client(),
+    )
+    monkeypatch.setattr(
+        "codexloop.infrastructure.api.gateway.resolve_callable",
+        lambda method, client_cls=None: _List.list,
+    )
+    gw = OpenAIApiGateway()
+    method = EndpointSpec(
+        resource_path=("models",),
+        method_name="list",
+        signature="(self)",
+        is_list=True,
+        is_streaming=False,
+    )
+    assert gw.invoke("models.list", method=method) == ["ok"]
 
 
 def test_collect_paginated_stops_at_max_items() -> None:

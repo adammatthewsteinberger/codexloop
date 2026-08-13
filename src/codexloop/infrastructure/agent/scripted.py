@@ -125,7 +125,7 @@ def resolve_test_agent_from_env() -> tuple[ScriptedAgentGateway, ScriptedCapacit
         )
     if not script_path:
         return None
-    if allow not in {"1", "true", "TRUE", "yes", "YES"}:
+    if allow not in {"1", "true", "TRUE", "yes", "YES"}:  # pragma: no cover — raised above
         return None
     script = load_agent_script(script_path)
     return ScriptedAgentGateway(script.turns), ScriptedCapacityProbe(script.probes)

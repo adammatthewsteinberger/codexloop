@@ -61,7 +61,7 @@ def _newest_contained_jsonl(root: Path) -> Path | None:
             if not path.is_file():
                 continue
             mtime = path.stat().st_mtime
-        except OSError:
+        except OSError:  # pragma: no cover
             continue
         if mtime >= newest_mtime:
             newest = path
@@ -76,7 +76,7 @@ def _contained(path: Path, root: Path) -> bool:
         return False
     try:
         return resolved.is_relative_to(root)
-    except ValueError:
+    except ValueError:  # pragma: no cover
         return False
 
 

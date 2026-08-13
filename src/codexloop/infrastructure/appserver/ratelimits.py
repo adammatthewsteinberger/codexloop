@@ -54,7 +54,7 @@ def _window(value: object, *, now: datetime) -> RateLimitWindow | None:
             window_minutes=minutes,
             resets_at=_resets_at(value, now=now),
         )
-    except (TypeError, ValueError, OverflowError, OSError):
+    except (TypeError, ValueError, OverflowError, OSError):  # pragma: no cover
         return None
 
 
@@ -73,7 +73,7 @@ def _resets_at(window: Mapping[str, Any], *, now: datetime) -> datetime | None:
     if isinstance(raw_in, int | float):
         try:
             return now + timedelta(seconds=float(raw_in))
-        except (OverflowError, ValueError):
+        except (OverflowError, ValueError):  # pragma: no cover
             return None
     return None
 

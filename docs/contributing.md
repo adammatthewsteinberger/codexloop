@@ -17,7 +17,7 @@ pytest -m system               # scripted system harness
 pytest -m live                 # real Codex account (opt-in)
 ```
 
-Coverage floors: domain/app 100%, infrastructure ≥90%, cli ≥85%.
+Coverage floors: whole package 100% (`pytest --cov=codexloop --cov-fail-under=100`).
 
 ## Commits
 

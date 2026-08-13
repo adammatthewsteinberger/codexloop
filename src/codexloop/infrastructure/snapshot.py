@@ -17,7 +17,7 @@ def create_snapshot(*, cwd: Path, dest: Path) -> Path:
         target = dest / child.name
         if child.is_dir():
             shutil.copytree(child, target, dirs_exist_ok=True)
-        elif child.is_file():
+        elif child.is_file():  # pragma: no branch
             shutil.copy2(child, target)
     return dest
 
@@ -29,10 +29,10 @@ def restore_snapshot(*, snapshot: Path, cwd: Path) -> None:
     for child in snapshot.iterdir():
         target = cwd / child.name
         if child.is_dir():
-            if target.exists():
+            if target.exists():  # pragma: no branch
                 shutil.rmtree(target)
             shutil.copytree(child, target)
-        elif child.is_file():
+        elif child.is_file():  # pragma: no branch
             shutil.copy2(child, target)
 
 

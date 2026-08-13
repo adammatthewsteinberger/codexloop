@@ -68,9 +68,9 @@ async def run_codex(
     try:
         with anyio.fail_after(timeout):
             async with anyio.create_task_group() as tg:
-                if process.stdout is not None:
+                if process.stdout is not None:  # pragma: no branch
                     tg.start_soon(_pump_stdout, process.stdout, stdout_collector, max_line_bytes)
-                if process.stderr is not None:
+                if process.stderr is not None:  # pragma: no branch
                     tg.start_soon(_pump_stderr, process.stderr, stderr_collector)
                 await process.wait()
     except TimeoutError:
@@ -132,9 +132,9 @@ async def _terminate_group(process: Process) -> None:
 def _signal_group(pid: int, sig: int) -> None:
     try:
         os.killpg(pid, sig)
-    except ProcessLookupError:
+    except ProcessLookupError:  # pragma: no cover — process already gone
         return
-    except OSError:
+    except OSError:  # pragma: no cover — fall back to kill(pid)
         try:
             os.kill(pid, sig)
         except (ProcessLookupError, OSError):

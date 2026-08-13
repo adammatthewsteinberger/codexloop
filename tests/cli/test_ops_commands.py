@@ -258,3 +258,123 @@ def test_reset_and_snapshot_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     result = _invoke("snapshot", "named")
     assert result.exit_code == 0
     assert "snapshot" in result.output
+
+
+def test_ops_configuration_errors_exit_2(monkeypatch: pytest.MonkeyPatch) -> None:
+    from codexloop.domain.errors import ConfigurationError
+
+    def boom(*_a: object, **_k: object) -> object:
+        raise ConfigurationError("no run")
+
+    for target in (
+        "codexloop.cli.commands.stop.enqueue_run_control",
+        "codexloop.cli.commands.prompt.enqueue_run_control",
+        "codexloop.cli.commands.model_cmd.enqueue_run_control",
+        "codexloop.cli.commands.effort_cmd.enqueue_run_control",
+        "codexloop.cli.commands.approval_cmd.enqueue_run_control",
+        "codexloop.cli.commands.sandbox_cmd.enqueue_run_control",
+        "codexloop.cli.commands.cwd_cmd.enqueue_run_control",
+        "codexloop.cli.commands.savepoints.list_savepoints",
+        "codexloop.cli.commands.unwind.unwind_savepoint",
+        "codexloop.cli.commands.reset.create_savepoint",
+        "codexloop.cli.commands.snapshot.take_snapshot",
+    ):
+        monkeypatch.setattr(target, boom)
+
+    assert _invoke("stop").exit_code == 2
+    assert _invoke("prompt", "hi", "--now").exit_code == 2
+    assert _invoke("model", "gpt-5").exit_code == 2
+    assert _invoke("effort", "high").exit_code == 2
+    assert _invoke("approval", "never").exit_code == 2
+    assert _invoke("sandbox", "workspace-write").exit_code == 2
+    assert _invoke("cwd", "/tmp").exit_code == 2
+    assert _invoke("savepoints").exit_code == 2
+    assert _invoke("unwind", "1").exit_code == 2
+    assert _invoke("reset").exit_code == 2
+    assert _invoke("snapshot", "x").exit_code == 2
+
+
+def test_effort_rejects_invalid_value() -> None:
+    result = _invoke("effort", "ludicrous")
+    assert result.exit_code == 2
+
+
+def test_capacity_prints_both_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    windows = PlanWindows(
+        primary=None,
+        secondary=RateLimitWindow(used_percent=20.0, window_minutes=60, resets_at=None),
+        plan_type=None,
+        limit_reached="primary",
+    )
+    monkeypatch.setattr(
+        "codexloop.cli.commands.capacity.read_capacity_windows",
+        lambda: windows,
+    )
+    result = _invoke("capacity")
+    assert result.exit_code == 0
+    assert "primary: unavailable" in result.output
+    assert "secondary: used=20.0%" in result.output
+    assert "limit_reached: primary" in result.output
+
+
+def test_reset_none_exits_1(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "codexloop.cli.commands.reset.create_savepoint",
+        lambda **kwargs: None,
+    )
+    result = _invoke("reset")
+    assert result.exit_code == 1
+    assert "not a git repository" in result.output
+
+
+def test_reset_ref_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Point:
+        n = 2
+        sha = "ffffffffffff"
+        label = "reset"
+        ref = "refs/codexloop/x/2"
+        committed = False
+
+    monkeypatch.setattr(
+        "codexloop.cli.commands.reset.create_savepoint",
+        lambda **kwargs: _Point(),
+    )
+    result = _invoke("reset")
+    assert result.exit_code == 0
+    assert "ref-only" in result.output
+
+
+def test_snapshot_restore_and_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+    monkeypatch.setattr(
+        "codexloop.cli.commands.snapshot.restore_run_snapshot",
+        lambda name, run_id=None: seen.append(name),
+    )
+    result = _invoke("snapshot", "--restore", "snap-a")
+    assert result.exit_code == 0
+    assert seen == ["snap-a"]
+    assert "restored snapshot snap-a" in result.output
+
+    monkeypatch.setattr(
+        "codexloop.cli.commands.snapshot.take_snapshot",
+        lambda **kwargs: (_ for _ in ()).throw(FileNotFoundError("missing")),
+    )
+    result = _invoke("snapshot")
+    assert result.exit_code == 2
+
+
+def test_unwind_without_backup_ref(monkeypatch: pytest.MonkeyPatch) -> None:
+    point = SavePointRef(
+        n=1,
+        sha="abc123",
+        label="x",
+        ref="refs/codexloop/r/1",
+        at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        "codexloop.cli.commands.unwind.unwind_savepoint",
+        lambda *a, **k: UnwindResult(to=point, backup_ref=None, restored_sha="abc123"),
+    )
+    result = _invoke("unwind", "1", "--no-backup")
+    assert result.exit_code == 0
+    assert "backup" not in result.output

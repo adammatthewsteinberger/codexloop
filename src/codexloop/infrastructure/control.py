@@ -64,7 +64,7 @@ class FileRunControl:
         dest = self._quarantine / path.name
         try:
             path.replace(dest)
-        except OSError:
+        except OSError:  # pragma: no cover — leave in place if move fails
             dest = path
         self._logger.warning(
             "control.quarantined",

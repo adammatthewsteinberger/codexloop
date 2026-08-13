@@ -71,7 +71,7 @@ def to_turn_signals(
                     final_message = text
             case ThreadStarted() | TurnStarted() | ItemStarted() | UnknownEvent():
                 continue
-            case _:
+            case _:  # pragma: no cover — exhaustive CodexEvent union
                 assert_never(event)
 
     return TurnSignals(
