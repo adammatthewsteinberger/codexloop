@@ -27,19 +27,34 @@ class FakeClock:
 class FakeSleeper:
     """Jump the paired FakeClock to ``when`` instead of blocking."""
 
-    def __init__(self, clock: FakeClock) -> None:
+    def __init__(self, clock: FakeClock, *, call_log: list[str] | None = None) -> None:
         self._clock = clock
+        self._call_log = call_log
         self.requested: list[datetime] = []
 
     async def sleep_until(self, when: datetime) -> None:
         self.requested.append(when)
+        if self._call_log is not None:
+            self._call_log.append("sleep_until")
         current = self._clock.now()
         if when > current:
             self._clock.advance(when - current)
 
 
 class FakeAgentGateway:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        outcomes: Sequence[TurnOutcome] | None = None,
+        *,
+        clock: FakeClock | None = None,
+        turn_elapsed: timedelta | None = None,
+        call_log: list[str] | None = None,
+    ) -> None:
+        self._outcomes = None if outcomes is None else list(outcomes)
+        self._index = 0
+        self._clock = clock
+        self._turn_elapsed = turn_elapsed
+        self._call_log = call_log
         self.sent_prompts: list[str] = []
         self.closed = False
         self.profiles: list[ModelEffortProfile] = []
@@ -50,10 +65,22 @@ class FakeAgentGateway:
 
     async def send_turn(self, prompt: str) -> TurnOutcome:
         self.sent_prompts.append(prompt)
-        return TurnOutcome()
+        if self._call_log is not None:
+            self._call_log.append("send_turn")
+        if self._clock is not None and self._turn_elapsed is not None:
+            self._clock.advance(self._turn_elapsed)
+        if self._outcomes is None:
+            return TurnOutcome()
+        if self._index >= len(self._outcomes):
+            raise AssertionError("FakeAgentGateway: no more scripted turns")
+        outcome = self._outcomes[self._index]
+        self._index += 1
+        return outcome
 
     async def close(self) -> None:
         self.closed = True
+        if self._call_log is not None:
+            self._call_log.append("close")
 
     async def set_profile(self, profile: ModelEffortProfile) -> None:
         self.profiles.append(profile)
@@ -73,13 +100,27 @@ class FakeAgentGateway:
 
 
 class FakeCapacityProbe:
-    def __init__(self, result: ProbeResult | None = None) -> None:
+    def __init__(
+        self,
+        result: ProbeResult | Sequence[ProbeResult] | None = None,
+        *,
+        call_log: list[str] | None = None,
+    ) -> None:
         self.calls = 0
-        self._result = result or ProbeResult(outcome=Available())
+        self._call_log = call_log
+        if result is None:
+            self._results = [ProbeResult(outcome=Available())]
+        elif isinstance(result, ProbeResult):
+            self._results = [result]
+        else:
+            self._results = list(result)
 
     async def probe(self) -> ProbeResult:
         self.calls += 1
-        return self._result
+        if self._call_log is not None:
+            self._call_log.append("probe")
+        index = min(self.calls - 1, len(self._results) - 1)
+        return self._results[index]
 
 
 class FakeThreadCatalog:
@@ -142,14 +183,21 @@ class FakeLogger:
 
 
 class FakeRunStateStore:
-    def __init__(self) -> None:
+    def __init__(self, *, call_log: list[str] | None = None) -> None:
         self._states: dict[str, dict[str, object]] = {}
+        self._call_log = call_log
+        self.saves: list[tuple[str, dict[str, object]]] = []
 
     def load(self, run_id: str) -> dict[str, object] | None:
-        return self._states.get(run_id)
+        state = self._states.get(run_id)
+        return None if state is None else dict(state)
 
     def save(self, run_id: str, state: Mapping[str, object]) -> None:
-        self._states[run_id] = dict(state)
+        snapshot = dict(state)
+        self._states[run_id] = snapshot
+        self.saves.append((run_id, snapshot))
+        if self._call_log is not None:
+            self._call_log.append("save")
 
 
 class FakeSessionLock:
@@ -167,10 +215,26 @@ class FakeSessionLock:
 
 
 class FakeRunControl:
-    def __init__(self, commands: Sequence[ControlCommand] | None = None) -> None:
+    def __init__(
+        self,
+        commands: Sequence[ControlCommand] | None = None,
+        *,
+        script: Sequence[Sequence[ControlCommand]] | None = None,
+        call_log: list[str] | None = None,
+    ) -> None:
         self._commands = list(commands or ())
+        self._script = [list(batch) for batch in script] if script is not None else None
+        self._call_log = call_log
+        self.polls = 0
 
     def poll(self) -> Sequence[ControlCommand]:
+        self.polls += 1
+        if self._call_log is not None:
+            self._call_log.append("poll")
+        if self._script is not None:
+            if self._script:
+                return self._script.pop(0)
+            return []
         pending, self._commands = self._commands, []
         return pending
 

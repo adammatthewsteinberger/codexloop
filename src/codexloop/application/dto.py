@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from codexloop.domain.capacity import CapacityState, PlanWindows
 from codexloop.domain.signals import TurnSignals
 
-__all__ = ["ProbeResult", "TokenUsage", "TurnOutcome", "TurnSignals"]
+__all__ = ["ProbeResult", "RunResult", "TokenUsage", "TurnOutcome", "TurnSignals"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,9 +23,19 @@ class TurnOutcome:
     signals: TurnSignals | None = None
     usage: TokenUsage | None = None
     exit_code: int | None = None
+    thread_id: str | None = None
+    cost_dollars: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
 class ProbeResult:
     outcome: CapacityState
     snapshot: PlanWindows | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RunResult:
+    success: bool
+    reason: str
+    turns: int
+    thread_id: str | None
