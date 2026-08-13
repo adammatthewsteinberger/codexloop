@@ -385,6 +385,151 @@ def test_rate_limits_garbage_window_never_raises() -> None:
     assert event.plan_windows.secondary is None
 
 
+def test_empty_line_and_empty_type_are_ignored() -> None:
+    parser = JsonlParser()
+    assert parser.parse_line("   ") is None
+    assert parser.parse_line('{"type":""}') is None
+    assert parser.malformed_count == 0
+
+
+def test_event_msg_without_token_count_is_unknown() -> None:
+    parser = JsonlParser()
+    event = parser.parse_line('{"type":"event_msg","payload":{"type":"other"}}')
+    assert isinstance(event, UnknownEvent)
+    assert event.type == "event_msg"
+
+
+def test_rate_limits_blob_missing_and_non_mapping() -> None:
+    parser = JsonlParser()
+    missing = parser.parse_line('{"type":"rate_limits.updated"}')
+    assert isinstance(missing, RateLimitsUpdated)
+    assert missing.plan_windows is None
+    non_map = parser.parse_line('{"type":"rate_limits.updated","rate_limits":["x"]}')
+    assert isinstance(non_map, RateLimitsUpdated)
+    assert non_map.plan_windows is None
+
+
+def test_usage_and_item_non_mapping_are_none() -> None:
+    parser = JsonlParser()
+    completed = parser.parse_line('{"type":"turn.completed","usage":"nope"}')
+    assert isinstance(completed, TurnCompleted)
+    assert completed.usage is None
+    started = parser.parse_line('{"type":"item.started","item":"nope"}')
+    assert isinstance(started, ItemStarted)
+    assert started.item is None
+
+
+def test_error_string_and_non_mapping_payloads() -> None:
+    parser = JsonlParser()
+    as_str = parser.parse_line('{"type":"error","error":"boom"}')
+    assert isinstance(as_str, ErrorEvent)
+    assert as_str.error == ErrorPayload(code=None, type=None, message="boom", status=None)
+    as_list = parser.parse_line('{"type":"turn.failed","error":[1]}')
+    assert isinstance(as_list, TurnFailed)
+    assert as_list.error is None
+    missing = parser.parse_line('{"type":"turn.failed"}')
+    assert isinstance(missing, TurnFailed)
+    assert missing.error is None
+
+
+def test_error_found_but_unusable_continues_to_next_path() -> None:
+    parser = JsonlParser()
+    event = parser.parse_line(
+        json.dumps(
+            {
+                "type": "turn.failed",
+                "error": [1],
+                "payload": {"error": WINDOW_ERROR},
+            }
+        )
+    )
+    assert isinstance(event, TurnFailed)
+    assert event.error is not None
+    assert event.error.code == "usage_limit_reached"
+
+
+def test_window_bool_resets_and_integer_float_tokens() -> None:
+    now = datetime(2026, 8, 13, 12, 0, tzinfo=UTC)
+    parser = JsonlParser(now=now)
+    event = parser.parse_line(
+        json.dumps(
+            {
+                "type": "rate_limits.updated",
+                "rate_limits": {
+                    "primary": {
+                        "used_percent": True,
+                        "window_minutes": 10.0,
+                        "resets_at": True,
+                        "resets_in_seconds": True,
+                    },
+                    "secondary": {
+                        "used_percent": "nope",
+                        "window_minutes": 5,
+                    },
+                },
+            }
+        )
+    )
+    assert isinstance(event, RateLimitsUpdated)
+    windows = event.plan_windows
+    assert windows is not None
+    assert windows.primary is not None
+    assert windows.primary.used_percent is None
+    assert windows.primary.window_minutes == 10
+    assert windows.primary.resets_at is None
+    assert windows.secondary is not None
+    assert windows.secondary.used_percent is None
+    assert windows.secondary.resets_at is None
+
+
+def test_window_overflow_resets_never_raise() -> None:
+    parser = JsonlParser()
+    event = parser.parse_line(
+        json.dumps(
+            {
+                "type": "rate_limits.updated",
+                "rate_limits": {
+                    "primary": {
+                        "used_percent": 1,
+                        "window_minutes": 1,
+                        "resets_at": 10**20,
+                    },
+                    "secondary": {
+                        "used_percent": 1,
+                        "window_minutes": 1,
+                        "resets_in_seconds": 10**20,
+                    },
+                },
+            }
+        )
+    )
+    assert isinstance(event, RateLimitsUpdated)
+    assert event.plan_windows is not None
+    assert event.plan_windows.primary is not None
+    assert event.plan_windows.primary.resets_at is None
+    assert event.plan_windows.secondary is not None
+    assert event.plan_windows.secondary.resets_at is None
+
+
+def test_window_exception_path_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(_value: object) -> int:
+        raise OverflowError
+
+    monkeypatch.setattr("codexloop.infrastructure.agent.events._opt_int", _boom)
+    parser = JsonlParser()
+    event = parser.parse_line(
+        json.dumps(
+            {
+                "type": "rate_limits.updated",
+                "rate_limits": {"primary": {"window_minutes": 1}},
+            }
+        )
+    )
+    assert isinstance(event, RateLimitsUpdated)
+    assert event.plan_windows is not None
+    assert event.plan_windows.primary is None
+
+
 def test_event_msg_token_count_parses_as_rate_limits_updated() -> None:
     now = datetime(2026, 1, 1, tzinfo=UTC)
     parser = JsonlParser(now=now)

@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 from codexloop.infrastructure.lock import AdvisoryFileLock
 from tests.application.fakes import FakeLogger
 
@@ -61,3 +63,62 @@ def test_only_known_dead_pid_lock_is_broken(tmp_path: Path) -> None:
     dead_path.write_text(f"{_DEAD_PID}\n", encoding="utf-8")
     assert lock.acquire("dead") is True
     assert dead_path.read_text(encoding="utf-8").strip() == str(os.getpid())
+
+
+def test_zero_pid_is_treated_as_dead_and_broken(tmp_path: Path) -> None:
+    lock = AdvisoryFileLock(tmp_path)
+    (tmp_path / "zero.lock").write_text("0\n", encoding="utf-8")
+    assert lock.acquire("zero") is True
+
+
+def test_permission_error_on_kill_treats_pid_as_alive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock = AdvisoryFileLock(tmp_path)
+    (tmp_path / "held.lock").write_text("12345\n", encoding="utf-8")
+
+    def _deny(pid: int, sig: int) -> None:
+        del pid, sig
+        raise PermissionError
+
+    monkeypatch.setattr("codexloop.infrastructure.lock.os.kill", _deny)
+    assert lock.acquire("held") is False
+    assert (tmp_path / "held.lock").is_file()
+
+
+def test_unknown_oserror_on_kill_treats_pid_as_alive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock = AdvisoryFileLock(tmp_path)
+    (tmp_path / "held.lock").write_text("12345\n", encoding="utf-8")
+
+    def _unknown(pid: int, sig: int) -> None:
+        del pid, sig
+        raise OSError("unknown errno")
+
+    monkeypatch.setattr("codexloop.infrastructure.lock.os.kill", _unknown)
+    assert lock.acquire("held") is False
+
+
+def test_publish_file_exists_error_is_not_acquired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock = AdvisoryFileLock(tmp_path)
+
+    def _exists(src: str, dst: str) -> None:
+        del src, dst
+        raise FileExistsError
+
+    monkeypatch.setattr("codexloop.infrastructure.lock.os.link", _exists)
+    assert lock.acquire("race") is False
+
+
+def test_publish_oserror_is_not_acquired(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    lock = AdvisoryFileLock(tmp_path)
+
+    def _fail(src: str, dst: str) -> None:
+        del src, dst
+        raise OSError("disk full")
+
+    monkeypatch.setattr("codexloop.infrastructure.lock.os.link", _fail)
+    assert lock.acquire("io") is False

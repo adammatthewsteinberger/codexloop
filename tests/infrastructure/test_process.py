@@ -51,12 +51,15 @@ def _pid_alive(pid: int) -> bool:
 
 def _find_orphan_pair() -> tuple[int, int] | None:
     """Return ``(parent_pid, grandchild_pid)`` from the process table, if present."""
-    listing = subprocess.run(
-        ["ps", "-axo", "pid=,ppid=,command="],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        listing = subprocess.run(
+            ["ps", "-axo", "pid=,ppid=,command="],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except PermissionError:
+        pytest.skip("ps not permitted")
     for raw in listing.stdout.splitlines():
         line = raw.strip()
         if not all(marker in line for marker in _ORPHAN_MARKERS):
@@ -71,6 +74,11 @@ def _find_orphan_pair() -> tuple[int, int] | None:
             continue
         return ppid, pid
     return None
+
+
+async def test_empty_argv_raises_named_error(tmp_path: Path) -> None:
+    with pytest.raises(CodexBinaryError, match="non-empty"):
+        await run_codex([], cwd=tmp_path, env=_env(), timeout=1.0, max_line_bytes=64)
 
 
 # --- Concurrency --------------------------------------------------------------
@@ -121,6 +129,15 @@ async def test_hang_times_out_with_named_timeout(
     configure_fake_codex(mode="hang")
     with pytest.raises(CodexBinaryError, match=r"timed out after 0\.2"):
         await _run(tmp_path, timeout=0.2)
+
+
+def test_find_orphan_pair_skips_when_ps_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _deny(*_args: object, **_kwargs: object) -> object:
+        raise PermissionError
+
+    monkeypatch.setattr(subprocess, "run", _deny)
+    with pytest.raises(pytest.skip.Exception, match="ps not permitted"):
+        _find_orphan_pair()
 
 
 # --- Orphan / cancellation ----------------------------------------------------

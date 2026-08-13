@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,6 +19,7 @@ from codexloop.infrastructure.agent.events import (
     JsonlParser,
     RateLimitsUpdated,
     TurnCompleted,
+    TurnFailed,
     Usage,
 )
 from codexloop.infrastructure.agent.schema import write_output_schema
@@ -160,6 +162,41 @@ def test_rate_limits_updated_maps_plan_windows() -> None:
     events = [RateLimitsUpdated(plan_windows=windows)]
     signals = to_turn_signals(events, exit_code=0, stderr_tail="", now=NOW)
     assert signals.plan_windows is windows
+
+
+def test_rate_limits_updated_with_none_windows_is_skipped() -> None:
+    events = [RateLimitsUpdated(plan_windows=None), TurnCompleted(usage=None)]
+    signals = to_turn_signals(events, exit_code=0, stderr_tail="", now=NOW)
+    assert signals.plan_windows is None
+    assert signals.completed is True
+
+
+def test_turn_failed_with_none_error_still_marks_failed() -> None:
+    signals = to_turn_signals([TurnFailed(error=None)], exit_code=1, stderr_tail="x", now=NOW)
+    assert signals.failed is True
+    assert signals.error_code is None
+
+
+def test_error_retry_after_seconds_is_merged() -> None:
+    error = SimpleNamespace(code="x", type="y", status=429, retry_after_s=1.5)
+    signals = to_turn_signals(
+        [ErrorEvent(error=error)],  # type: ignore[arg-type]
+        exit_code=1,
+        stderr_tail="",
+        now=NOW,
+    )
+    assert signals.retry_after_s == 1.5
+    assert signals.error_code == "x"
+
+
+def test_item_completed_none_and_non_string_text() -> None:
+    events = [
+        ItemCompleted(item=None),
+        ItemCompleted(item={"type": "agent_message", "text": 12}),
+        TurnCompleted(usage=None),
+    ]
+    signals = to_turn_signals(events, exit_code=0, stderr_tail="", now=NOW)
+    assert signals.final_message is None
 
 
 def test_non_agent_item_completed_is_not_final_message() -> None:

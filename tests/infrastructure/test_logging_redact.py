@@ -9,8 +9,15 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
-from codexloop.infrastructure.logging import RedactionProcessor, configure_logging, get_logger
+from codexloop.infrastructure.logging import (
+    RedactionProcessor,
+    StructlogAppLogger,
+    configure_logging,
+    get_logger,
+)
 from codexloop.infrastructure.progress import LoggingProgressReporter
 from codexloop.infrastructure.redact import REDACTED_VALUE, redact
 from tests.application.fakes import FakeLogger
@@ -119,3 +126,51 @@ async def test_sleeper_is_noop_when_target_is_in_the_past() -> None:
     start = clock.now()
     await sleeper.sleep_until(past)
     assert (clock.now() - start).total_seconds() < 0.5
+
+
+async def test_sleeper_defaults_to_system_clock() -> None:
+    sleeper = AnyioSleeper()
+    await sleeper.sleep_until(datetime.now(UTC) - timedelta(seconds=1))
+
+
+def test_configure_logging_writes_json_file(tmp_path: Path) -> None:
+    log_file = tmp_path / "nested" / "app.log"
+    configure_logging(level="INFO", json_logs=False, log_file=log_file)
+    try:
+        get_logger(component="file").info("file.event", ok=True)
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        text = log_file.read_text(encoding="utf-8")
+    finally:
+        logging.getLogger().handlers.clear()
+    assert log_file.is_file()
+    assert "file.event" in text
+
+
+def test_structlog_app_logger_bind_and_levels() -> None:
+    configure_logging(level="INFO", json_logs=False)
+    try:
+        logger = StructlogAppLogger(component="unit")
+        bound = logger.bind(run_id="r1")
+        logger.info("info.event")
+        logger.warning("warn.event")
+        logger.error("error.event")
+        bound.info("bound.event")
+    finally:
+        logging.getLogger().handlers.clear()
+
+
+def test_redaction_processor_keeps_event_when_redact_is_non_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("codexloop.infrastructure.logging.redact", lambda _value: "not-a-dict")
+    processor = RedactionProcessor()
+    event = {"event": "auth"}
+    assert processor(None, "info", event) is event
+
+
+def test_redact_walks_tuples() -> None:
+    redacted = redact(("ok", f"token={_SK_TOKEN}"))
+    assert redacted[0] == "ok"
+    assert _SK_TOKEN not in redacted[1]
+    assert REDACTED_VALUE in redacted[1]

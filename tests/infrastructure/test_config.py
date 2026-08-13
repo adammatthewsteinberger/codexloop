@@ -6,6 +6,9 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+import pytest
+
+from codexloop.domain.errors import ConfigurationError
 from codexloop.infrastructure.config import RunnerConfig, load_config
 from codexloop.infrastructure.notify import CommandNotifier
 
@@ -123,6 +126,48 @@ def test_unknown_toml_keys_are_ignored(tmp_path: Path) -> None:
     (tmp_path / "codexloop.toml").write_text('not_a_field = "x"\nmax_turns = 7\n', encoding="utf-8")
     config = load_config(cwd=tmp_path, home=tmp_path, environ={})
     assert config.max_turns == 7
+
+
+def test_env_false_bool_and_optional_string_fields(tmp_path: Path) -> None:
+    config = load_config(
+        cwd=tmp_path,
+        home=tmp_path,
+        environ={
+            "CODEXLOOP_JSON_LOGS": "false",
+            "CODEXLOOP_LOG_FILE": "/tmp/codexloop.log",
+            "CODEXLOOP_NOTIFY_COMMAND": "echo hi",
+            "CODEXLOOP_LOG_LEVEL": "DEBUG",
+        },
+    )
+    assert config.json_logs is False
+    assert config.log_file == "/tmp/codexloop.log"
+    assert config.notify_command == "echo hi"
+    assert config.log_level == "DEBUG"
+
+
+def test_numeric_and_compound_duration_flags(tmp_path: Path) -> None:
+    seconds = load_config(cwd=tmp_path, home=tmp_path, environ={}, flags={"max_wait": 90})
+    assert seconds.max_wait == timedelta(seconds=90)
+    compound = load_config(cwd=tmp_path, home=tmp_path, environ={}, flags={"max_wait": "1d2h3m4s"})
+    assert compound.max_wait == timedelta(days=1, hours=2, minutes=3, seconds=4)
+
+
+@pytest.mark.parametrize(
+    ("flags", "match"),
+    [
+        ({"json_logs": "maybe"}, "invalid bool"),
+        ({"json_logs": 1}, "invalid bool"),
+        ({"max_turns": True}, "invalid int"),
+        ({"max_turns": 1.5}, "invalid int"),
+        ({"max_wait": True}, "invalid duration"),
+        ({"max_wait": "bogus"}, "invalid duration"),
+        ({"max_wait": object()}, "invalid duration"),
+        ({"add_dirs": 12}, "invalid list"),
+    ],
+)
+def test_invalid_coercions_raise(tmp_path: Path, flags: dict[str, object], match: str) -> None:
+    with pytest.raises(ConfigurationError, match=match):
+        load_config(cwd=tmp_path, home=tmp_path, environ={}, flags=flags)
 
 
 def test_command_notifier_records_noop_when_unset() -> None:

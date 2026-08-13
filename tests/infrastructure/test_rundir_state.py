@@ -64,6 +64,22 @@ def test_file_run_state_store_roundtrip(tmp_path: Path) -> None:
     }
 
 
+def test_state_store_non_object_json_is_none(tmp_path: Path) -> None:
+    runs_root = tmp_path / "runs"
+    run = runs_root / "rid"
+    run.mkdir(parents=True)
+    (run / "state.json").write_text("[1]\n", encoding="utf-8")
+    assert FileRunStateStore(runs_root).load("rid") is None
+
+
+def test_event_sink_creates_missing_file(tmp_path: Path) -> None:
+    path = tmp_path / "new" / "events.jsonl"
+    sink = JsonlRunEventSink(path)
+    assert path.is_file()
+    sink.emit({"event_type": "created"})
+    assert "created" in path.read_text(encoding="utf-8")
+
+
 def test_event_sink_appends_redacted_jsonl(tmp_path: Path) -> None:
     directory = RunDirectory.create(runs_root_for(tmp_path))
     sink = JsonlRunEventSink(directory.events_path)
