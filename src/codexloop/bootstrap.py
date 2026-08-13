@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,7 @@ __all__ = [
     "list_run_records",
     "read_run_events",
     "read_run_record",
+    "register_drain",
 ]
 
 _ACTIVE_DRAIN: DrainControl | None = None
@@ -56,6 +57,17 @@ class DrainControl:
 
 
 def current_drain() -> DrainControl | None:
+    return _ACTIVE_DRAIN
+
+
+def register_drain(control: DrainControl | None = None) -> DrainControl:
+    """Install the process-wide drain. Pass a control to replace; omit to reuse."""
+    global _ACTIVE_DRAIN
+    if control is not None:
+        _ACTIVE_DRAIN = control
+        return control
+    if _ACTIVE_DRAIN is None:
+        _ACTIVE_DRAIN = DrainControl()
     return _ACTIVE_DRAIN
 
 
@@ -137,7 +149,6 @@ def build_runner(
     ensure_run: bool = True,
 ) -> RunnerContext:
     """Wire ports for one CLI invocation. ``cli/`` must not import infrastructure."""
-    global _ACTIVE_DRAIN
     cwd = Path.cwd() if cwd is None else cwd
     if config is None:
         config = load_config(cwd=cwd, flags=flags)
@@ -151,8 +162,7 @@ def build_runner(
     runs_root = runs_root_for(cwd)
     rundir: RunDirectory | None = RunDirectory.create(runs_root) if ensure_run else None
     clock = SystemClock()
-    drain = DrainControl()
-    _ACTIVE_DRAIN = drain
+    drain = register_drain()
 
     def write_artifact(name: str, content: str) -> None:
         if rundir is None:
@@ -185,12 +195,27 @@ def list_run_records(cwd: Path | None = None) -> list[dict[str, Any]]:
     return [_record_from_dir(child) for child in sorted(root.iterdir()) if child.is_dir()]
 
 
+def _latest_run_key(record: dict[str, Any]) -> datetime:
+    meta = record.get("meta")
+    if isinstance(meta, dict):
+        raw = meta.get("started_at")
+        if isinstance(raw, str):
+            try:
+                return datetime.fromisoformat(raw)
+            except ValueError:
+                pass
+    try:
+        return datetime.fromtimestamp(Path(str(record["root"])).stat().st_mtime, tz=UTC)
+    except OSError:
+        return datetime.min.replace(tzinfo=UTC)
+
+
 def read_run_record(run_id: str | None = None, *, cwd: Path | None = None) -> dict[str, Any] | None:
     records = list_run_records(cwd)
     if not records:
         return None
     if run_id is None:
-        return records[-1]
+        return max(records, key=_latest_run_key)
     for record in records:
         if record["run_id"] == run_id:
             return record

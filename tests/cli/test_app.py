@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -268,3 +269,56 @@ def test_status_logs_runs_with_created_run(monkeypatch: pytest.MonkeyPatch, tmp_
     by_id = _invoke("status", ctx.run_id)
     assert by_id.exit_code == 0
     assert ctx.run_id in by_id.output
+
+
+def test_status_and_logs_pick_latest_started_at_not_uuid_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    runs_root = tmp_path / ".codexloop" / "runs"
+    older_id = "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+    newer_id = "00000000-0000-0000-0000-000000000000"
+    for run_id, started in (
+        (older_id, "2026-01-01T00:00:00+00:00"),
+        (newer_id, "2026-08-13T12:00:00+00:00"),
+    ):
+        root = runs_root / run_id
+        root.mkdir(parents=True)
+        (root / "meta.json").write_text(
+            json.dumps({"run_id": run_id, "started_at": started}) + "\n",
+            encoding="utf-8",
+        )
+        (root / "events.jsonl").write_text(f"event-for-{run_id}\n", encoding="utf-8")
+
+    status = _invoke("status")
+    assert status.exit_code == 0
+    assert newer_id in status.output
+    assert older_id not in status.output
+
+    logs = _invoke("logs")
+    assert logs.exit_code == 0
+    assert f"event-for-{newer_id}" in logs.output
+    assert f"event-for-{older_id}" not in logs.output
+
+
+def test_signal_at_handler_install_drains_instead_of_swallowing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from codexloop.bootstrap import RunnerConfig, build_runner
+    from codexloop.cli.asyncio import _request_drain, async_command
+
+    def fire_as_soon_as_installed() -> None:
+        _request_drain()
+
+    monkeypatch.setattr(
+        "codexloop.cli.asyncio._install_drain_signals",
+        fire_as_soon_as_installed,
+    )
+
+    @async_command
+    async def cmd() -> str:
+        ctx = build_runner(RunnerConfig(), cwd=tmp_path)
+        assert list(ctx.control.poll()) == [Stop()]
+        return "ok"
+
+    assert cmd() == "ok"

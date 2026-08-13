@@ -12,7 +12,7 @@ import anyio
 import typer
 
 from codexloop.application.dto import RunResult
-from codexloop.bootstrap import current_drain
+from codexloop.bootstrap import DrainControl, current_drain, register_drain
 from codexloop.domain.errors import ConfigurationError
 
 
@@ -62,6 +62,7 @@ def async_command[**P, T](func: Callable[P, Coroutine[Any, Any, T]]) -> Callable
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         async def _runner() -> T:
+            register_drain(DrainControl())
             _install_drain_signals()
             return await func(*args, **kwargs)
 

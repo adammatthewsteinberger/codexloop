@@ -133,11 +133,19 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Infrastructure only reachable from bootstrap"
+name = "Domain and application cannot reach infrastructure"
 type = "forbidden"
-source_modules = ["codexloop.domain", "codexloop.application", "codexloop.cli"]
+source_modules = ["codexloop.domain", "codexloop.application"]
 forbidden_modules = ["codexloop.infrastructure"]
-# CLI/application may compose via bootstrap; they must not import infrastructure directly.
+# Transitively sealed: application → bootstrap → infrastructure is also forbidden.
+allow_indirect_imports = false
+
+[[tool.importlinter.contracts]]
+name = "CLI cannot import infrastructure directly"
+type = "forbidden"
+source_modules = ["codexloop.cli"]
+forbidden_modules = ["codexloop.infrastructure"]
+# cli → bootstrap → infrastructure is legal; direct cli → infrastructure is not.
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
