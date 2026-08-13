@@ -24,20 +24,12 @@ class AdvisoryFileLock:
         path = self._path(thread_id)
         if path.is_file():
             pid = _read_pid(path)
-            if pid is not None and _pid_alive(pid):
+            if pid is None or _pid_alive(pid):
+                # Empty/unreadable/unparseable lockfile, or live/unknown pid: held.
                 return False
-            reason = "process is dead" if pid is not None else "invalid lockfile"
-            self._log_stale(thread_id, pid, reason)
+            self._log_stale(thread_id, pid, "process is dead")
             path.unlink(missing_ok=True)
-        try:
-            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            return False
-        try:
-            os.write(fd, f"{os.getpid()}\n".encode())
-        finally:
-            os.close(fd)
-        return True
+        return _publish_lock(path)
 
     def release(self, thread_id: str) -> None:
         self._path(thread_id).unlink(missing_ok=True)
@@ -59,6 +51,21 @@ class AdvisoryFileLock:
         )
 
 
+def _publish_lock(path: Path) -> bool:
+    """Atomically publish a non-empty lockfile (write pid, then link into place)."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(f"{os.getpid()}\n", encoding="utf-8")
+        os.link(str(tmp), str(path))
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+    finally:
+        tmp.unlink(missing_ok=True)
+    return True
+
+
 def _read_pid(path: Path) -> int | None:
     try:
         return int(path.read_text(encoding="utf-8").strip())
@@ -76,5 +83,6 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     except OSError:
-        return False
+        # Unknown errno: treat as alive so we never break a maybe-held lock.
+        return True
     return True
