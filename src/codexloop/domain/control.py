@@ -89,7 +89,7 @@ class ResourceMutate:
         return {"kind": "resource_mutate", "payload": dict(self.payload)}
 
 
-InboxCommand = (
+ControlCommand = (
     Stop
     | Prompt
     | SetModel
@@ -102,22 +102,17 @@ InboxCommand = (
 )
 
 
-def parse_control(data: Mapping[str, object]) -> InboxCommand:
+def parse_control(data: Mapping[str, object]) -> ControlCommand:
     kind = data.get("kind")
     if not isinstance(kind, str):
         raise ConfigurationError("control command missing kind")
     builder = _BUILDERS.get(kind)
     if builder is None:
         raise ConfigurationError(f"unknown control command kind: {kind!r}")
-    return builder(data)
-
-
-class ControlCommand:
-    """Factory for inbox command variants (``Stop | Prompt | …``)."""
-
-    @staticmethod
-    def from_dict(data: Mapping[str, object]) -> InboxCommand:
-        return parse_control(data)
+    try:
+        return builder(data)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ConfigurationError(f"invalid control command {kind!r}: {exc}") from exc
 
 
 def _parse_stop(_data: Mapping[str, object]) -> Stop:
@@ -153,11 +148,13 @@ def _parse_snapshot(_data: Mapping[str, object]) -> Snapshot:
 
 
 def _parse_resource_mutate(data: Mapping[str, object]) -> ResourceMutate:
-    payload = cast(Mapping[str, object], data["payload"])
-    return ResourceMutate(payload=dict(payload))
+    payload = data["payload"]
+    if not isinstance(payload, Mapping):
+        raise TypeError("resource_mutate payload must be a mapping")
+    return ResourceMutate(payload=dict(cast(Mapping[str, object], payload)))
 
 
-_BUILDERS: dict[str, Callable[[Mapping[str, object]], InboxCommand]] = {
+_BUILDERS: dict[str, Callable[[Mapping[str, object]], ControlCommand]] = {
     "stop": _parse_stop,
     "prompt": _parse_prompt,
     "set_model": _parse_set_model,
