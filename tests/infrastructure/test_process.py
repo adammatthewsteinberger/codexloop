@@ -148,6 +148,15 @@ async def test_cancel_kills_child_and_grandchild(
     configure_fake_codex: Callable[..., None],
     tmp_path: Path,
 ) -> None:
+    try:
+        subprocess.run(
+            ["ps", "-axo", "pid=,ppid=,command="],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except PermissionError:
+        pytest.skip("ps not permitted")
     configure_fake_codex(mode="orphan_child")
     parent_pid: int | None = None
     grandchild_pid: int | None = None

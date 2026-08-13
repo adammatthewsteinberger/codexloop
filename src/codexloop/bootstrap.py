@@ -8,17 +8,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from codexloop.application.dto import ProbeResult
 from codexloop.application.ports import AgentGateway
 from codexloop.application.runner import RunnerContext
 from codexloop.domain.budget import Budget
-from codexloop.domain.capacity import Available
 from codexloop.domain.control import ControlCommand, Stop
 from codexloop.domain.errors import ConfigurationError
 from codexloop.domain.session import ThreadRef
 from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
 from codexloop.infrastructure.agent.argv import ExecOpts
 from codexloop.infrastructure.agent.gateway import CodexExecGateway
+from codexloop.infrastructure.agent.probe import ExecCapacityProbe
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
 from codexloop.infrastructure.config import RunnerConfig, load_config
 from codexloop.infrastructure.lock import AdvisoryFileLock
@@ -69,11 +68,6 @@ def register_drain(control: DrainControl | None = None) -> DrainControl:
     if _ACTIVE_DRAIN is None:
         _ACTIVE_DRAIN = DrainControl()
     return _ACTIVE_DRAIN
-
-
-class _AlwaysAvailableProbe:
-    async def probe(self) -> ProbeResult:
-        return ProbeResult(outcome=Available())
 
 
 class _JsonThreadCatalog:
@@ -173,7 +167,7 @@ def build_runner(
         clock=clock,
         sleeper=AnyioSleeper(clock),
         gateway=_select_gateway(transport, cwd=cwd, config=config),
-        probe=_AlwaysAvailableProbe(),
+        probe=ExecCapacityProbe(cwd=cwd),
         store=FileRunStateStore(runs_root),
         control=drain,
         catalog=_JsonThreadCatalog(cwd / ".codexloop" / "threads.json"),
