@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -35,10 +36,23 @@ COMMANDS = (
     "cwd",
 )
 _RUNNER = CliRunner()
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def _invoke(*args: str) -> object:
-    return _RUNNER.invoke(app, list(args))
+    return _RUNNER.invoke(
+        app,
+        list(args),
+        env={
+            "NO_COLOR": "1",
+            "TERM": "dumb",
+            "COLUMNS": "120",
+        },
+    )
+
+
+def _plain(text: str) -> str:
+    return _ANSI.sub("", text)
 
 
 def test_version_prints_package_version() -> None:
@@ -182,12 +196,14 @@ def test_build_runner_app_server_falls_back_to_exec(
 def test_run_help_mentions_transport() -> None:
     result = _invoke("run", "--help")
     assert result.exit_code == 0
-    assert "--transport" in result.output
+    plain = _plain(result.output)
+    assert "--transport" in plain
+    assert "app-server" in plain
 
 
 def test_transport_app_server_help_still_accepted() -> None:
     result = _invoke("run", "--help")
-    assert "app-server" in result.output
+    assert "app-server" in _plain(result.output)
 
 
 def test_drain_control_surfaces_stop() -> None:

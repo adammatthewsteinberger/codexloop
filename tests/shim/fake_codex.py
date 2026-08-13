@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 HUGE_LINE_BYTES = 2 * 1024 * 1024 + 1
 HANG_SECONDS = 3600
@@ -88,6 +89,9 @@ def _orphan_child() -> int:
         file=sys.stderr,
         flush=True,
     )
+    marker = os.environ.get("FAKE_CODEX_ORPHAN_MARKER")
+    if marker:
+        Path(marker).write_text(f"{os.getpid()} {proc.pid}\n", encoding="utf-8")
     time.sleep(HANG_SECONDS)
     return 0
 

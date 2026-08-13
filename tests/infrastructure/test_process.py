@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import os
 import signal
-import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -16,7 +15,6 @@ from codexloop.domain.errors import CodexBinaryError
 from codexloop.infrastructure.agent.process import STDERR_TAIL_BYTES, ProcessResult, run_codex
 
 _ARGV = ["codex", "exec", "--json", "--", "probe"]
-_ORPHAN_MARKERS = ("SIGHUP", "SIG_IGN")
 
 
 def _env() -> dict[str, str]:
@@ -49,31 +47,20 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
-def _find_orphan_pair() -> tuple[int, int] | None:
-    """Return ``(parent_pid, grandchild_pid)`` from the process table, if present."""
+def _read_orphan_pair(marker: Path) -> tuple[int, int] | None:
+    if not marker.is_file():
+        return None
     try:
-        listing = subprocess.run(
-            ["ps", "-axo", "pid=,ppid=,command="],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except PermissionError:
-        pytest.skip("ps not permitted")
-    for raw in listing.stdout.splitlines():
-        line = raw.strip()
-        if not all(marker in line for marker in _ORPHAN_MARKERS):
-            continue
-        parts = line.split(None, 2)
-        if len(parts) < 2:
-            continue
-        try:
-            pid = int(parts[0])
-            ppid = int(parts[1])
-        except ValueError:
-            continue
-        return ppid, pid
-    return None
+        text = marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    parts = text.split()
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
 
 
 async def test_empty_argv_raises_named_error(tmp_path: Path) -> None:
@@ -131,13 +118,11 @@ async def test_hang_times_out_with_named_timeout(
         await _run(tmp_path, timeout=0.2)
 
 
-def test_find_orphan_pair_skips_when_ps_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _deny(*_args: object, **_kwargs: object) -> object:
-        raise PermissionError
-
-    monkeypatch.setattr(subprocess, "run", _deny)
-    with pytest.raises(pytest.skip.Exception, match="ps not permitted"):
-        _find_orphan_pair()
+def test_read_orphan_pair_returns_none_for_missing_or_bad_marker(tmp_path: Path) -> None:
+    assert _read_orphan_pair(tmp_path / "missing.pids") is None
+    bad = tmp_path / "bad.pids"
+    bad.write_text("not-pids\n", encoding="utf-8")
+    assert _read_orphan_pair(bad) is None
 
 
 # --- Orphan / cancellation ----------------------------------------------------
@@ -148,34 +133,28 @@ async def test_cancel_kills_child_and_grandchild(
     configure_fake_codex: Callable[..., None],
     tmp_path: Path,
 ) -> None:
-    try:
-        subprocess.run(
-            ["ps", "-axo", "pid=,ppid=,command="],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except PermissionError:
-        pytest.skip("ps not permitted")
+    marker = tmp_path / "orphan.pids"
     configure_fake_codex(mode="orphan_child")
+    env = _env()
+    env["FAKE_CODEX_ORPHAN_MARKER"] = str(marker)
     parent_pid: int | None = None
     grandchild_pid: int | None = None
 
     async def _invoke() -> None:
-        await _run(tmp_path, timeout=30.0)
+        await _run(tmp_path, timeout=30.0, env=env)
 
     try:
         async with anyio.create_task_group() as tg:
             tg.start_soon(_invoke)
-            deadline = anyio.current_time() + 5.0
+            deadline = anyio.current_time() + 10.0
             while anyio.current_time() < deadline:
-                found = _find_orphan_pair()
+                found = _read_orphan_pair(marker)
                 if found is not None:
                     parent_pid, grandchild_pid = found
                     break
                 await anyio.sleep(0.05)
             else:
-                pytest.fail("orphan grandchild never appeared in the process table")
+                pytest.fail("orphan pid marker never appeared")
             tg.cancel_scope.cancel()
     finally:
         assert parent_pid is not None
