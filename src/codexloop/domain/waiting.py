@@ -77,7 +77,11 @@ class AdaptiveWaitPolicy:
         )
         delay = self._capped_backoff(attempt, ceiling)
         if state.retry_after is not None:
-            delay = max(delay, state.retry_after)
+            # Retry-After is a minimum; add a small random delay so clients do not
+            # wake together when the header is the binding wait (R2).
+            retry_s = max(state.retry_after.total_seconds(), 0.0)
+            spread_s = retry_s * self._config.jitter_ratio * self._rand()
+            delay = max(delay, timedelta(seconds=retry_s + spread_s))
         return min(delay, ceiling)
 
     def _window_instant(self, state: WindowExhausted, now: datetime, attempt: int) -> datetime:

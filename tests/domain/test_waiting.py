@@ -63,6 +63,28 @@ def test_throttle_retry_after_is_a_minimum_plus_jitter_from_backoff() -> None:
     assert _next(state, attempt=5) == NOW + timedelta(seconds=32)
 
 
+def test_throttle_binding_retry_after_adds_positive_jitter_above_floor() -> None:
+    """When Retry-After binds, wait is strictly above it (R2) unless ceiling equals it."""
+    retry = timedelta(seconds=30)
+    ceiling = timedelta(seconds=60)
+    config = WaitConfig(jitter_ratio=0.1, throttle_ceiling=ceiling)
+    # rand=1.0 → spread = retry * jitter_ratio * 1.0 = 3s → delay = 33s
+    policy = AdaptiveWaitPolicy(config, rand=lambda: 1.0)
+    delay = policy.next_probe_at(ThrottleExhausted(retry_after=retry), NOW, 0, FAR_DEADLINE) - NOW
+    assert delay > retry
+    assert delay >= retry
+    assert delay <= ceiling
+
+    at_ceiling = (
+        AdaptiveWaitPolicy(
+            WaitConfig(jitter_ratio=0.1, throttle_ceiling=retry),
+            rand=lambda: 1.0,
+        ).next_probe_at(ThrottleExhausted(retry_after=retry), NOW, 0, FAR_DEADLINE)
+        - NOW
+    )
+    assert at_ceiling == retry
+
+
 def test_throttle_retry_after_longer_than_ceiling_is_capped_at_60s() -> None:
     state = ThrottleExhausted(retry_after=timedelta(seconds=90))
     assert _next(state, attempt=0) == NOW + timedelta(seconds=60)
