@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Gates py${{ matrix.python-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: mypy src/codexloop
+      - run: lint-imports
+      - run: bandit -q -r src/codexloop
+      - run: pip-audit
+      - run: pytest --cov-report=term-missing
+
+  build:
+    name: Package builds and is installable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - name: Confirm py.typed ships in the wheel
+        run: unzip -l dist/*.whl | grep -q py.typed
+      - name: Install the built wheel into a clean venv and run the console script
+        run: |
+          python -m venv /tmp/codexloop-smoke
+          /tmp/codexloop-smoke/bin/pip install --upgrade pip
+          /tmp/codexloop-smoke/bin/pip install dist/*.whl
+          /tmp/codexloop-smoke/bin/codexloop --version
+          /tmp/codexloop-smoke/bin/codexloop --help
