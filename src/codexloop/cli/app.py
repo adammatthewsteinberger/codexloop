@@ -10,6 +10,7 @@ from __future__ import annotations
 import typer
 
 from codexloop import __version__
+from codexloop.bootstrap import build_api_typer_app
 from codexloop.cli.commands.approval_cmd import approval_cmd
 from codexloop.cli.commands.capacity import capacity
 from codexloop.cli.commands.cwd_cmd import cwd_cmd
@@ -82,6 +83,7 @@ app.command("effort")(effort_cmd)
 app.command("approval")(approval_cmd)
 app.command("sandbox")(sandbox_cmd)
 app.command("cwd")(cwd_cmd)
+app.add_typer(build_api_typer_app(), name="api")
 
 
 def main() -> None:

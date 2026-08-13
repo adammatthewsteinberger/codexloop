@@ -24,6 +24,7 @@ from codexloop.infrastructure.agent.argv import ExecOpts
 from codexloop.infrastructure.agent.gateway import CodexExecGateway
 from codexloop.infrastructure.agent.probe import ExecCapacityProbe
 from codexloop.infrastructure.agent.scripted import resolve_test_agent_from_env
+from codexloop.infrastructure.api.binder import build_api_typer_app as _build_api_typer_app
 from codexloop.infrastructure.appserver.client import AppServerClient
 from codexloop.infrastructure.capacity_probe import CompositeCapacityProbe
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
@@ -44,6 +45,7 @@ from codexloop.infrastructure.state_bus import read_state
 __all__ = [
     "DrainControl",
     "RunnerConfig",
+    "build_api_typer_app",
     "build_runner",
     "current_drain",
     "create_savepoint",
@@ -425,3 +427,8 @@ def restore_run_snapshot(
     root = Path.cwd() if cwd is None else cwd
     directory = _run_directory(run_id, cwd=root)
     restore_snapshot(snapshot=directory.snapshots / name, cwd=root)
+
+
+def build_api_typer_app() -> Any:
+    """Compose the generated ``codexloop api`` Typer sub-app (M4)."""
+    return _build_api_typer_app()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from typer.testing import CliRunner
 from codexloop.application.usecases.doctor import DoctorCheck, DoctorReport
 from codexloop.cli.app import app
 from codexloop.domain.capacity import PlanWindows, RateLimitWindow
+from codexloop.domain.savepoint import SavePointRef, UnwindResult
 from codexloop.infrastructure.rundir import RunDirectory, runs_root_for
 
 _RUNNER = CliRunner()
@@ -143,3 +145,96 @@ def test_watch_prints_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     result = _invoke("watch")
     assert result.exit_code == 0
     assert "max_wait" in result.output
+
+
+def test_effort_approval_sandbox_cwd_queue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rundir = _seed_run(tmp_path, monkeypatch)
+    assert _invoke("effort", "high").exit_code == 0
+    assert _invoke("approval", "never").exit_code == 0
+    assert _invoke("sandbox", "workspace-write").exit_code == 0
+    assert _invoke("cwd", "/tmp/work").exit_code == 0
+    kinds = {json.loads(p.read_text(encoding="utf-8"))["kind"] for p in rundir.inbox.glob("*.json")}
+    assert kinds == {"set_effort", "set_approval", "set_sandbox", "set_cwd"}
+
+
+def test_prompt_requires_exactly_one_timing() -> None:
+    result = _invoke("prompt", "hi")
+    assert result.exit_code == 2
+    result = _invoke("prompt", "hi", "--now", "--next-turn")
+    assert result.exit_code == 2
+
+
+def test_savepoints_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed_run(tmp_path, monkeypatch)
+    monkeypatch.setattr("codexloop.cli.commands.savepoints.list_savepoints", lambda run_id=None: [])
+    result = _invoke("savepoints")
+    assert result.exit_code == 0
+    assert "no savepoints" in result.output
+
+
+def test_savepoints_lists_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed_run(tmp_path, monkeypatch)
+    point = SavePointRef(
+        n=2,
+        sha="deadbeefdeadbeef",
+        label="turn",
+        ref="refs/codexloop/r/2",
+        at=datetime(2026, 1, 1, tzinfo=UTC),
+        plan_item=None,
+        committed=False,
+    )
+    monkeypatch.setattr(
+        "codexloop.cli.commands.savepoints.list_savepoints",
+        lambda run_id=None: [point],
+    )
+    result = _invoke("savepoints")
+    assert result.exit_code == 0
+    assert "deadbeef" in result.output
+    assert "ref-only" in result.output or "turn" in result.output
+
+
+def test_unwind_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed_run(tmp_path, monkeypatch)
+    point = SavePointRef(
+        n=1,
+        sha="abc123",
+        label="x",
+        ref="refs/codexloop/r/1",
+        at=datetime(2026, 1, 1, tzinfo=UTC),
+        plan_item=None,
+        committed=True,
+    )
+    monkeypatch.setattr(
+        "codexloop.cli.commands.unwind.unwind_savepoint",
+        lambda *a, **k: UnwindResult(to=point, backup_ref="refs/backup", restored_sha="abc123"),
+    )
+    result = _invoke("unwind", "1")
+    assert result.exit_code == 0
+    assert "restored" in result.output
+
+
+def test_reset_and_snapshot_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed_run(tmp_path, monkeypatch)
+
+    class _Point:
+        n = 1
+        sha = "abc123456789"
+        label = "reset"
+        ref = "refs/codexloop/x/1"
+        committed = True
+
+    monkeypatch.setattr(
+        "codexloop.cli.commands.reset.create_savepoint",
+        lambda **kwargs: _Point(),
+    )
+    result = _invoke("reset")
+    assert result.exit_code == 0
+    assert "savepoint 1" in result.output
+
+    monkeypatch.setattr(
+        "codexloop.cli.commands.snapshot.take_snapshot",
+        lambda **kwargs: Path("/tmp/snap"),
+    )
+    result = _invoke("snapshot", "named")
+    assert result.exit_code == 0
+    assert "snapshot" in result.output
