@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from codexloop.application.ports import AgentGateway
+from codexloop.application.ports import AgentGateway, CapacityProbe
 from codexloop.application.runner import RunnerContext
 from codexloop.application.usecases.doctor import DoctorReport, run_doctor
 from codexloop.application.usecases.run_control import enqueue_control
@@ -23,6 +23,7 @@ from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
 from codexloop.infrastructure.agent.argv import ExecOpts
 from codexloop.infrastructure.agent.gateway import CodexExecGateway
 from codexloop.infrastructure.agent.probe import ExecCapacityProbe
+from codexloop.infrastructure.agent.scripted import resolve_test_agent_from_env
 from codexloop.infrastructure.appserver.client import AppServerClient
 from codexloop.infrastructure.capacity_probe import CompositeCapacityProbe
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
@@ -188,11 +189,33 @@ def build_runner(
         (rundir.root / name).write_text(content, encoding="utf-8")
 
     app_server = AppServerClient(cwd=cwd)
-    probe = CompositeCapacityProbe(
-        ExecCapacityProbe(cwd=cwd),
-        app_server=app_server.read_rate_limits,
-        rollout=read_rollout_rate_limits,
-    )
+    gateway: AgentGateway
+    probe: CapacityProbe
+    scripted = resolve_test_agent_from_env()
+    if scripted is not None:
+        gateway, probe = scripted
+        wait_policy = AdaptiveWaitPolicy(
+            WaitConfig(
+                jitter_ratio=0.0,
+                quota_probe_base=timedelta(milliseconds=50),
+                quota_probe_ceiling=timedelta(milliseconds=200),
+                window_probe_interval=timedelta(milliseconds=50),
+                throttle_ceiling=timedelta(milliseconds=200),
+                aggressive_ceiling=timedelta(milliseconds=200),
+                transient_ceiling=timedelta(milliseconds=200),
+                backoff_base=timedelta(milliseconds=50),
+                grace=timedelta(0),
+            ),
+            rand=lambda: 0.0,
+        )
+    else:
+        gateway = _select_gateway(transport, cwd=cwd, config=config)
+        probe = CompositeCapacityProbe(
+            ExecCapacityProbe(cwd=cwd),
+            app_server=app_server.read_rate_limits,
+            rollout=read_rollout_rate_limits,
+        )
+        wait_policy = AdaptiveWaitPolicy(WaitConfig())
 
     drain = register_drain()
     if rundir is not None:
@@ -204,7 +227,7 @@ def build_runner(
     return RunnerContext(
         clock=clock,
         sleeper=AnyioSleeper(clock),
-        gateway=_select_gateway(transport, cwd=cwd, config=config),
+        gateway=gateway,
         probe=probe,
         store=FileRunStateStore(runs_root),
         control=control,
@@ -214,7 +237,7 @@ def build_runner(
         notifier=CommandNotifier(config.notify_command),
         reporter=LoggingProgressReporter(),
         budget=Budget(max_turns=config.max_turns, max_dollars=None, max_wall_clock=None),
-        wait_policy=AdaptiveWaitPolicy(WaitConfig()),
+        wait_policy=wait_policy,
         max_wait=config.max_wait,
         run_id=rundir.run_id if rundir is not None else "anonymous",
         cwd=str(cwd),
