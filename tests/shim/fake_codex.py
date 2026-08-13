@@ -47,6 +47,30 @@ def _huge_line() -> int:
     return 0
 
 
+def _both_streams() -> int:
+    """Write enough to both pipes that a sequential reader deadlocks."""
+    out_line = ("O" * 64 + "\n").encode()
+    err_line = ("E" * 64 + "\n").encode()
+    for i in range(8_000):
+        sys.stdout.buffer.write(out_line)
+        sys.stderr.buffer.write(err_line)
+        if i % 100 == 0:
+            sys.stdout.buffer.flush()
+            sys.stderr.buffer.flush()
+    sys.stdout.buffer.flush()
+    print("fake-codex: mode=both_streams", file=sys.stderr, flush=True)
+    return 0
+
+
+def _stdin_probe() -> int:
+    is_tty = sys.stdin.isatty()
+    eof = sys.stdin.read(1) == ""
+    msg = f"fake-codex: mode=stdin_probe tty={is_tty} eof={eof}"
+    print(msg, flush=True)
+    print(msg, file=sys.stderr, flush=True)
+    return 0
+
+
 def _orphan_child() -> int:
     child_src = (
         "import signal, time\n"
@@ -78,6 +102,10 @@ def main() -> int:
         return _orphan_child()
     if mode == "huge_line":
         return _huge_line()
+    if mode == "both_streams":
+        return _both_streams()
+    if mode == "stdin_probe":
+        return _stdin_probe()
     return _stream()
 
 
