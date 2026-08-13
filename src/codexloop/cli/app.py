@@ -86,9 +86,9 @@ app.command("cwd")(cwd_cmd)
 app.add_typer(build_api_typer_app(), name="api")
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover — process entrypoint
     app()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

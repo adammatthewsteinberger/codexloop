@@ -81,8 +81,16 @@ def _handle_rate_limits(msg_id: object, mode: str) -> None:
     _write({"id": msg_id, "result": RATE_LIMITS_BLOB})
 
 
+def _emit_turn(message: str = "done") -> None:
+    _write({"method": "turn/started", "params": {"turnId": "turn-1", "turn": {"id": "turn-1"}}})
+    _write({"method": "approval/request", "params": {"requestId": "apr-1"}})
+    _write({"method": "item/agentMessage/delta", "params": {"delta": message}})
+    _write({"method": "turn/completed", "params": {"finalMessage": message}})
+
+
 def main() -> int:
     mode = _mode()
+    thread_id = "thread-1"
     for raw in sys.stdin:
         line = raw.strip()
         if not line:
@@ -98,12 +106,40 @@ def main() -> int:
         method = message.get("method")
         msg_id = message.get("id")
         if method == "initialize":
+            if mode == "init_fail":
+                _write({"id": msg_id, "error": {"code": -32000, "message": "nope"}})
+                continue
             _initialize_result(msg_id)
             continue
         if method == "initialized":
             continue
         if method == "account/rateLimits/read":
             _handle_rate_limits(msg_id, mode)
+            continue
+        if method == "thread/start":
+            _write({"id": msg_id, "result": {"thread": {"id": thread_id}}})
+            if mode == "turn_fail":
+                _write({"method": "turn/started", "params": {"turnId": "turn-1"}})
+                _write(
+                    {
+                        "method": "turn/failed",
+                        "params": {"code": "insufficient_quota", "type": "billing"},
+                    }
+                )
+            else:
+                _emit_turn("hello-from-appserver")
+            continue
+        if method == "turn/start":
+            _write({"id": msg_id, "result": {"turn": {"id": "turn-1"}}})
+            _emit_turn("hello-again")
+            continue
+        if method == "turn/interrupt":
+            _write({"id": msg_id, "result": {"ok": True}})
+            continue
+        if method == "turn/steer":
+            _write({"id": msg_id, "result": {"ok": True}})
+            continue
+        if method == "approval/respond":
             continue
     return 0
 

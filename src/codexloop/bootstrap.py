@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+import anyio
 
 from codexloop.application.ports import AgentGateway, CapacityProbe
 from codexloop.application.runner import RunnerContext
@@ -26,6 +29,7 @@ from codexloop.infrastructure.agent.probe import ExecCapacityProbe
 from codexloop.infrastructure.agent.scripted import resolve_test_agent_from_env
 from codexloop.infrastructure.api.binder import build_api_typer_app as _build_api_typer_app
 from codexloop.infrastructure.appserver.client import AppServerClient
+from codexloop.infrastructure.appserver.gateway import probe_app_server_transport
 from codexloop.infrastructure.capacity_probe import CompositeCapacityProbe
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
 from codexloop.infrastructure.config import RunnerConfig, load_config
@@ -41,6 +45,7 @@ from codexloop.infrastructure.rundir import RunDirectory, runs_root_for
 from codexloop.infrastructure.snapshot import create_snapshot, restore_snapshot
 from codexloop.infrastructure.state import FileRunStateStore
 from codexloop.infrastructure.state_bus import read_state
+from codexloop.infrastructure.stream_ui import run_stream_ui
 
 __all__ = [
     "DrainControl",
@@ -50,6 +55,7 @@ __all__ = [
     "current_drain",
     "create_savepoint",
     "enqueue_run_control",
+    "events_path_for_run",
     "list_run_records",
     "list_savepoints",
     "read_capacity_windows",
@@ -60,6 +66,7 @@ __all__ = [
     "restore_run_snapshot",
     "run_doctor_checks",
     "run_is_live",
+    "run_stream_ui_for_events",
     "take_snapshot",
     "unwind_savepoint",
 ]
@@ -153,7 +160,19 @@ class _JsonThreadCatalog:
 
 def _select_gateway(transport: str, *, cwd: Path, config: RunnerConfig) -> AgentGateway:
     if transport == "app-server":
-        raise ConfigurationError("app-server transport is not implemented")
+
+        async def _probe() -> tuple[AgentGateway | None, str | None]:
+            return await probe_app_server_transport(cwd=cwd)
+
+        gateway, reason = anyio.run(_probe)
+        if gateway is not None:
+            return gateway
+        if reason:
+            print(f"codexloop: {reason}", file=sys.stderr)
+        return CodexExecGateway(
+            cwd=cwd,
+            opts=ExecOpts(prompt="", model=config.model, add_dirs=config.add_dirs),
+        )
     if transport != "exec":
         raise ConfigurationError(f"unknown transport {transport!r}")
     return CodexExecGateway(
@@ -432,3 +451,12 @@ def restore_run_snapshot(
 def build_api_typer_app() -> Any:
     """Compose the generated ``codexloop api`` Typer sub-app (M4)."""
     return _build_api_typer_app()
+
+
+def run_stream_ui_for_events(path: Path) -> None:
+    """Launch the optional Textual stream UI against an events JSONL file."""
+    run_stream_ui(path)
+
+
+def events_path_for_run(run_id: str | None = None, *, cwd: Path | None = None) -> Path:
+    return _run_directory(run_id, cwd=cwd).events_path

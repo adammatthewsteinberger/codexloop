@@ -160,12 +160,15 @@ def test_build_runner_gateway_satisfies_agent_gateway(tmp_path: Path) -> None:
     assert isinstance(ctx.gateway, AgentGateway)
 
 
-def test_build_runner_app_server_transport_not_implemented(tmp_path: Path) -> None:
+def test_build_runner_app_server_falls_back_to_exec(tmp_path: Path) -> None:
+    from codexloop.application.ports import AgentGateway
     from codexloop.bootstrap import RunnerConfig, build_runner
-    from codexloop.domain.errors import ConfigurationError
+    from codexloop.infrastructure.agent.gateway import CodexExecGateway
 
-    with pytest.raises(ConfigurationError, match="not implemented"):
-        build_runner(RunnerConfig(), transport="app-server", cwd=tmp_path)
+    ctx = build_runner(RunnerConfig(), transport="app-server", cwd=tmp_path)
+    assert isinstance(ctx.gateway, AgentGateway)
+    # Without a live app-server, capability probe falls back to exec.
+    assert isinstance(ctx.gateway, CodexExecGateway)
 
 
 def test_run_help_mentions_transport() -> None:
@@ -174,13 +177,9 @@ def test_run_help_mentions_transport() -> None:
     assert "--transport" in result.output
 
 
-def test_transport_app_server_exits_2(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    plan = tmp_path / "plan.md"
-    plan.write_text("- [ ] Add login\n", encoding="utf-8")
-    result = _invoke("run", "--transport", "app-server", str(plan))
-    assert result.exit_code == 2
-    assert "not implemented" in result.output.lower()
+def test_transport_app_server_help_still_accepted() -> None:
+    result = _invoke("run", "--help")
+    assert "app-server" in result.output
 
 
 def test_drain_control_surfaces_stop() -> None:
@@ -351,3 +350,34 @@ def test_signal_at_handler_install_drains_instead_of_swallowing(
         return "ok"
 
     assert cmd() == "ok"
+
+
+def test_run_stream_ui_flag_invokes_ui(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+    plan = tmp_path / "plan.md"
+    plan.write_text("- [ ] Add login\n", encoding="utf-8")
+    seen: list[object] = []
+
+    async def fake_run_plan(ctx: object, selector: object, plan_text: str) -> RunResult:
+        del ctx, selector, plan_text
+        return RunResult(success=True, reason="done", turns=1, thread_id="thr_ui")
+
+    monkeypatch.setattr("codexloop.cli.commands.run.run_plan", fake_run_plan)
+    monkeypatch.setattr(
+        "codexloop.cli.commands.run.run_stream_ui_for_events",
+        lambda path: seen.append(path),
+    )
+    result = _invoke("run", str(plan), "--stream-ui")
+    assert result.exit_code == 0
+    assert len(seen) == 1
+
+
+def test_render_threads_formats_refs() -> None:
+    from datetime import UTC, datetime
+
+    from codexloop.cli.render import render_threads
+    from codexloop.domain.session import ThreadRef
+
+    text = render_threads([ThreadRef("thr_1", "/tmp", datetime(2026, 8, 13, tzinfo=UTC), "gpt-5")])
+    assert "thr_1" in text
+    assert "gpt-5" in text

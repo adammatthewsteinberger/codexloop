@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 
 from codexloop.application.usecases.run_plan import run_plan
-from codexloop.bootstrap import build_runner
+from codexloop.bootstrap import build_runner, events_path_for_run, run_stream_ui_for_events
 from codexloop.cli.asyncio import async_command
 from codexloop.cli.render import render_result
 from codexloop.domain.session import PlanFile
@@ -29,6 +29,11 @@ async def run(
     model: str | None = typer.Option(None, "--model", help="Model name."),
     max_turns: int | None = typer.Option(None, "--max-turns", help="Turn budget."),
     max_wait: str | None = typer.Option(None, "--max-wait", help="Max wait duration."),
+    stream_ui: bool = typer.Option(
+        False,
+        "--stream-ui",
+        help="Open a Textual live view of the run event log after completion.",
+    ),
 ) -> object:
     """Drive a new autonomous run from a markdown work plan."""
     flags: dict[str, object] = {
@@ -40,4 +45,6 @@ async def run(
     text = plan.read_text(encoding="utf-8")
     result = await run_plan(ctx, PlanFile(str(plan)), text)
     typer.echo(render_result(result))
+    if stream_ui:
+        run_stream_ui_for_events(events_path_for_run())
     return result

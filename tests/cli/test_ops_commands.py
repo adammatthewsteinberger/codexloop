@@ -147,6 +147,26 @@ def test_watch_prints_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert "max_wait" in result.output
 
 
+def test_watch_exits_when_no_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("codexloop.cli.commands.watch.read_run_state", lambda run_id=None: {})
+    result = _invoke("watch")
+    assert result.exit_code == 1
+    assert "no run state" in result.output
+
+
+def test_watch_replay_opens_stream_ui(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed_run(tmp_path, monkeypatch)
+    seen: list[object] = []
+    monkeypatch.setattr(
+        "codexloop.cli.commands.watch.run_stream_ui_for_events",
+        lambda path: seen.append(path),
+    )
+    result = _invoke("watch", "--replay")
+    assert result.exit_code == 0
+    assert len(seen) == 1
+
+
 def test_effort_approval_sandbox_cwd_queue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rundir = _seed_run(tmp_path, monkeypatch)
     assert _invoke("effort", "high").exit_code == 0
