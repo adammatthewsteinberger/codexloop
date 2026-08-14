@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.1](https://github.com/adammatthewsteinberger/codexloop/compare/v0.1.0...v0.1.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* pin release-please to main ([4c974a2](https://github.com/adammatthewsteinberger/codexloop/commit/4c974a243f98d0790325929fd124c4aca72f04f7))
+* pin release-please to main and Node 24 action ([cf19789](https://github.com/adammatthewsteinberger/codexloop/commit/cf19789c9ed4fc179f88ef6176f8b05859d05cb8))
+* unstick version CI and keep TestPyPI on develop ([a4cf78e](https://github.com/adammatthewsteinberger/codexloop/commit/a4cf78eb32a622af03f707a5654c8da708a81f83))
+* version CI + TestPyPI only from develop ([01d7695](https://github.com/adammatthewsteinberger/codexloop/commit/01d7695de87849b949ffd6e275b1f79126f9f2c6))
+
+
+### Documentation
+
+* deploy MkDocs site to GitHub Pages ([bce3384](https://github.com/adammatthewsteinberger/codexloop/commit/bce33843a1eb7f2579fea6d895b9966abcf5f11e))
+* GitHub Pages MkDocs site ([e1c286b](https://github.com/adammatthewsteinberger/codexloop/commit/e1c286bef14b63f5b337548eb99bad94b917f21a))
+
 ## 0.1.0 (2026-08-13)
 
 
