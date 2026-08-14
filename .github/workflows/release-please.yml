@@ -9,6 +9,10 @@ on:
         description: "Build and publish ref to PyPI (Trusted Publishing). Use after tagging or to retry a release."
         type: boolean
         default: false
+      publish_tag:
+        description: "Git tag to build/publish when publish_to_pypi=true"
+        type: string
+        default: "v0.2.0"
 
 permissions:
   contents: write
@@ -65,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v0.1.0
+          ref: ${{ inputs.publish_tag }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
