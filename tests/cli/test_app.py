@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from codexloop import __version__
 from codexloop.application.dto import RunResult
 from codexloop.cli.app import app
 from codexloop.domain.control import Stop
@@ -58,7 +59,8 @@ def _plain(text: str) -> str:
 def test_version_prints_package_version() -> None:
     result = _invoke("--version")
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert __version__ in result.output
+    assert result.output.strip() == f"codexloop {__version__}"
 
 
 def test_help_lists_every_command() -> None:

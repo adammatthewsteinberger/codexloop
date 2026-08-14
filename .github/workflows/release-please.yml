@@ -5,12 +5,8 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      publish_to_testpypi:
-        description: "Also build and publish this commit to TestPyPI (Trusted Publishing)."
-        type: boolean
-        default: false
       publish_to_pypi:
-        description: "Build and publish ref to PyPI (Trusted Publishing). Use with a release tag checkout or main after tagging."
+        description: "Build and publish ref to PyPI (Trusted Publishing). Use after tagging or to retry a release."
         type: boolean
         default: false
 
@@ -79,26 +75,4 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          print-hash: true
-
-  publish-testpypi-manual:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_to_testpypi }}
-    runs-on: ubuntu-latest
-    environment: testpypi
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install --upgrade pip build twine
-      - run: python -m build
-      - run: twine check --strict dist/*
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          packages-dir: dist/
-          skip-existing: true
           print-hash: true
