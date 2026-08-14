@@ -148,15 +148,19 @@ class GitSavePointStore:
             handle.write(json.dumps(entry) + "\n")
 
     def _resolve_target(self, points: list[SavePointRef], to: str) -> SavePointRef:
+        # Numeric save-point indexes (``1``, ``2``, …) are accepted, but a
+        # shortened SHA can be all digits (e.g. ``4158599``). Prefer an exact
+        # index hit, then fall through to SHA/ref/label matching.
         if to.isdigit():
             n = int(to)
             for point in points:
                 if point.n == n:
                     return point
-            raise ValueError(f"no save point numbered {n}")
         for point in points:
             if point.ref == to or point.sha.startswith(to) or point.label == to:
                 return point
+        if to.isdigit():
+            raise ValueError(f"no save point numbered {int(to)}")
         raise ValueError(f"no save point matching {to!r}")
 
     def _is_git_repo(self) -> bool:

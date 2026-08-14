@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from codexloop.domain.errors import ConfigurationError
+from codexloop.domain.savepoint import SavePointRef
 from codexloop.infrastructure.agent import events as events_mod
 from codexloop.infrastructure.agent.process import _StdoutCollector
 from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
@@ -177,6 +178,24 @@ def test_git_savepoints_list_unwind_and_errors(tmp_path: Path) -> None:
 
     store2._run = flaky  # type: ignore[method-assign]
     assert store2._staged_paths() == ()
+
+
+def test_resolve_target_accepts_all_digit_sha_prefix(tmp_path: Path) -> None:
+    """Short SHAs can be decimal-only; do not treat them as save-point indexes."""
+    store = GitSavePointStore(cwd=tmp_path, index_path=tmp_path / "idx.jsonl")
+    point = SavePointRef(
+        n=1,
+        ref="refs/codexloop/r1/1",
+        sha="41585994ef67172a1b376616357ca2b92f4cb33d",
+        label="turn",
+        at=datetime.now(UTC),
+        plan_item=None,
+        committed=True,
+    )
+    assert store._resolve_target([point], "4158599") is point
+    assert store._resolve_target([point], "1") is point
+    with pytest.raises(ValueError, match="numbered"):
+        store._resolve_target([point], "99")
 
 
 def test_git_savepoints_missing_index_file(tmp_path: Path) -> None:
