@@ -156,6 +156,8 @@ def test_structlog_app_logger_bind_and_levels() -> None:
     try:
         logger = StructlogAppLogger(component="unit")
         bound = logger.bind(run_id="r1")
+        # debug() exists because the -v ladder needs somewhere for DEBUG to go.
+        logger.debug("debug.event")
         logger.info("info.event")
         logger.warning("warn.event")
         logger.error("error.event")
