@@ -156,14 +156,53 @@ def test_structlog_app_logger_bind_and_levels() -> None:
     try:
         logger = StructlogAppLogger(component="unit")
         bound = logger.bind(run_id="r1")
-        # debug() exists because the -v ladder needs somewhere for DEBUG to go.
-        logger.debug("debug.event")
         logger.info("info.event")
         logger.warning("warn.event")
         logger.error("error.event")
         bound.info("bound.event")
     finally:
         logging.getLogger().handlers.clear()
+
+
+def test_structlog_app_logger_forwards_every_level_to_the_bound_logger() -> None:
+    """Asserted against a stub rather than through a configured handler.
+
+    Whether a DEBUG record survives depends on the level structlog was
+    configured at, which differs between a developer shell and CI -- so a test
+    that only calls the method and looks for output is measuring the
+    configuration, not the adapter.
+    """
+
+    class _Recorder:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, dict[str, object]]] = []
+
+        def bind(self, **kwargs: object) -> _Recorder:
+            return self
+
+        def debug(self, event: str, **kwargs: object) -> None:
+            self.calls.append(("debug", event, kwargs))
+
+        def info(self, event: str, **kwargs: object) -> None:
+            self.calls.append(("info", event, kwargs))
+
+        def warning(self, event: str, **kwargs: object) -> None:
+            self.calls.append(("warning", event, kwargs))
+
+        def error(self, event: str, **kwargs: object) -> None:
+            self.calls.append(("error", event, kwargs))
+
+    recorder = _Recorder()
+    logger = StructlogAppLogger(recorder)  # type: ignore[arg-type]
+
+    logger.debug("d", a=1)
+    logger.info("i")
+    logger.warning("w")
+    logger.error("e")
+
+    assert [c[0] for c in recorder.calls] == ["debug", "info", "warning", "error"]
+    assert recorder.calls[0][2] == {"a": 1}
+    assert isinstance(logger.bind(run_id="r1"), StructlogAppLogger)
 
 
 def test_redaction_processor_keeps_event_when_redact_is_non_dict(
