@@ -35,7 +35,17 @@ jobs:
       - run: lint-imports
       - run: bandit -q -r src/codexloop
       - run: pip-audit
-      - run: pytest --cov-report=term-missing
+      # Per layer, not in aggregate: a blanket floor lets a well-tested domain
+      # hide an untested adapter. pytest-cov unions --cov scopes within one
+      # invocation, so each floor needs its own run.
+      - name: Coverage floor - domain (100%)
+        run: pytest -q --cov=codexloop.domain --cov-fail-under=100
+      - name: Coverage floor - application (100%)
+        run: pytest -q --cov=codexloop.application --cov-fail-under=100
+      - name: Coverage floor - infrastructure (100%)
+        run: pytest -q --cov=codexloop.infrastructure --cov-fail-under=100
+      - name: Coverage floor - cli (100%)
+        run: pytest -q --cov=codexloop.cli --cov-fail-under=100
 
   docs:
     name: MkDocs builds strictly
