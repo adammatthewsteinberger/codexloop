@@ -407,3 +407,15 @@ def test_render_threads_formats_refs() -> None:
     text = render_threads([ThreadRef("thr_1", "/tmp", datetime(2026, 8, 13, tzinfo=UTC), "gpt-5")])
     assert "thr_1" in text
     assert "gpt-5" in text
+
+
+def test_run_rejects_a_run_id_that_would_escape_the_runs_root(tmp_path: Path) -> None:
+    """A run id becomes a path segment, so traversal has to be refused before
+    anything is created -- and refused with a message, not a traceback."""
+    plan = tmp_path / "plan.md"
+    plan.write_text("# Plan\n\nDo the thing.\n")
+    result = CliRunner().invoke(app, ["run", str(plan), "--run-id", "../escape"])
+    assert result.exit_code == 2
+    combined = (result.stdout or "") + (result.stderr or "")
+    assert "invalid run id" in combined
+    assert not (tmp_path.parent / "escape").exists()
