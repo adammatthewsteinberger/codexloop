@@ -19,6 +19,7 @@ from codexloop.domain.capacity import (
 )
 from codexloop.domain.completion import Blocked, CompletionVerdict, Continue, Done
 from codexloop.domain.control import ControlCommand, Stop
+from codexloop.domain.forecast import CapacityForecast, WindDown
 
 
 class RunState(StrEnum):
@@ -31,6 +32,7 @@ class RunState(StrEnum):
     Stopping = "Stopping"
     Complete = "Complete"
     Failed = "Failed"
+    Handoff = "Handoff"
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,9 +66,24 @@ class Drain:
     pass
 
 
-Decision = SendTurn | Probe | WaitUntil | BackoffUntil | Finish | Drain
+@dataclass(frozen=True, slots=True)
+class WindDownAndFinish:
+    """Stop cleanly *before* capacity runs out, so the handoff artifacts can
+    still be produced with room to spare.
 
-_TERMINAL = frozenset({RunState.Complete, RunState.Failed})
+    Distinct from Finish: the work is not done and not blocked, it is being
+    handed over. A supervisor reads this as "resume me elsewhere".
+    """
+
+    reason: str
+    forecast: CapacityForecast
+
+
+Decision = SendTurn | Probe | WaitUntil | BackoffUntil | Finish | Drain | WindDownAndFinish
+
+# Handoff is terminal for this process: the work continues elsewhere, so
+# advancing out of it would restart a run that has already handed over.
+_TERMINAL = frozenset({RunState.Complete, RunState.Failed, RunState.Handoff})
 _DEADLINE_STATES = frozenset(
     {
         RunState.Preflight,
@@ -86,6 +103,7 @@ class LoopOutcome:
     capacity: CapacityState
     completion: CompletionVerdict | None = None
     deadline_exceeded: bool = False
+    wind_down: WindDown | None = None
 
 
 class RunLoopStateMachine:
@@ -117,6 +135,10 @@ class RunLoopStateMachine:
 def _stay_terminal(state: RunState) -> tuple[RunState, Decision]:
     if state is RunState.Complete:
         return RunState.Complete, Finish(success=True, reason="done")
+    if state is RunState.Handoff:
+        # Reported as a failure of *this* run, which is accurate: it did not
+        # finish the work. The marker on disk is what says it can be resumed.
+        return RunState.Handoff, Finish(success=False, reason="handoff")
     return RunState.Failed, Finish(success=False, reason="failed")
 
 
@@ -181,6 +203,13 @@ def _evaluate_completion(outcome: LoopOutcome, ledger: BudgetLedger) -> tuple[Ru
     exceeded = ledger.exceeded()
     if exceeded is not None:
         return RunState.Failed, Finish(success=False, reason=exceeded)
+    # Placement is the safety argument: Done, Blocked and an exact budget cap
+    # all outrank a *predicted* stop, and a real capacity rejection never
+    # reaches here at all -- _route_capacity handles those first.
+    if outcome.wind_down is not None:
+        return RunState.Handoff, WindDownAndFinish(
+            reason=outcome.wind_down.reason, forecast=outcome.wind_down.forecast
+        )
     if isinstance(completion, Continue):
         return RunState.Running, SendTurn()
     if completion is None:

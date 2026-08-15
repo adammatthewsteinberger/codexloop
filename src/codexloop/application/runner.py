@@ -12,6 +12,7 @@ from codexloop.application.ports import (
     AgentGateway,
     CapacityProbe,
     Clock,
+    Logger,
     Notifier,
     PermissionMode,
     ProgressReporter,
@@ -45,6 +46,14 @@ from codexloop.domain.control import (
     Stop,
 )
 from codexloop.domain.error_codes import ErrorClass, classify_code
+from codexloop.domain.forecast import (
+    BurnRate,
+    WindDown,
+    WindDownPolicy,
+    forecast,
+    should_wind_down,
+)
+from codexloop.domain.handoff_marker import HandoffMarker
 from codexloop.domain.loop import (
     BackoffUntil,
     Drain,
@@ -55,6 +64,7 @@ from codexloop.domain.loop import (
     RunState,
     SendTurn,
     WaitUntil,
+    WindDownAndFinish,
 )
 from codexloop.domain.model_profile import Effort, ModelEffortProfile
 from codexloop.domain.plan import WorkPlan
@@ -64,6 +74,26 @@ from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
 
 _FAR_FUTURE = timedelta(days=3650)
 _ZERO = timedelta(0)
+
+
+class _NullLogger:
+    """Diagnostics are optional; a run must not require them to be wired."""
+
+    def bind(self, **kwargs: object) -> _NullLogger:
+        del kwargs
+        return self
+
+    def debug(self, event: str, **kwargs: object) -> None:
+        del event, kwargs
+
+    def info(self, event: str, **kwargs: object) -> None:
+        del event, kwargs
+
+    def warning(self, event: str, **kwargs: object) -> None:
+        del event, kwargs
+
+    def error(self, event: str, **kwargs: object) -> None:
+        del event, kwargs
 
 
 def _discard_artifact(name: str, content: str) -> None:
@@ -90,6 +120,9 @@ class RunnerContext:
     )
     wait_policy: AdaptiveWaitPolicy | None = None
     max_wait: timedelta | None = None
+    logger: Logger | None = None
+    handoff_marker_writer: Callable[[HandoffMarker], None] | None = None
+    wind_down_policy: WindDownPolicy = field(default_factory=WindDownPolicy)
     run_id: str = "anonymous"
     cwd: str = "."
     model: str = "unknown"
@@ -110,6 +143,9 @@ class AutonomousRunner:
         self._notifier = ctx.notifier
         self._reporter = ctx.reporter
         self._budget = ctx.budget
+        self._log = ctx.logger or _NullLogger()
+        self._handoff_marker_writer = ctx.handoff_marker_writer
+        self._wind_down_policy = ctx.wind_down_policy
         self._wait_policy = ctx.wait_policy or AdaptiveWaitPolicy(WaitConfig(), rand=lambda: 0.0)
         self._max_wait = ctx.max_wait
         self._run_id = ctx.run_id
@@ -188,7 +224,11 @@ class AutonomousRunner:
                         self._record_thread(thread_id, started)
                         wait_attempt = 0
                         self._quota_notified = False
-                        outcome = LoopOutcome(capacity=capacity, completion=completion)
+                        outcome = LoopOutcome(
+                            capacity=capacity,
+                            completion=completion,
+                            wind_down=self._project_wind_down(capacity),
+                        )
                     case Probe():
                         probed = await self._probe.probe()
                         outcome = LoopOutcome(capacity=probed.outcome)
@@ -206,6 +246,22 @@ class AutonomousRunner:
                             remaining=remaining,
                             first_turn_done=not first_turn,
                             plan_text=plan_text,
+                        )
+                    case WindDownAndFinish() as wound_down:
+                        self._write_stop_summary(thread_id, remaining)
+                        self._persist(
+                            key=thread_id,
+                            remaining=remaining,
+                            first_turn_done=not first_turn,
+                            plan_text=plan_text,
+                            reason=f"wind-down: {wound_down.reason}",
+                        )
+                        self._write_handoff_marker(wound_down, thread_id, remaining)
+                        return RunResult(
+                            success=False,
+                            reason=f"wind-down: {wound_down.reason}",
+                            turns=self._ledger.turns,
+                            thread_id=thread_id,
                         )
                     case Finish() as finish:
                         self._persist(
@@ -400,6 +456,64 @@ class AutonomousRunner:
             f"{items}\n"
         )
         self._write_artifact("stop-summary.md", body)
+
+    def _project_wind_down(self, capacity: CapacityState) -> WindDown | None:
+        """Forecast remaining capacity, but only while the vendor says we are
+        not already blocked.
+
+        Returning None for every non-Available state is what keeps the plan
+        windows from ever influencing whether a turn is *sent*: once a real
+        rejection lands, the state machine's capacity routing owns it.
+        """
+        if not isinstance(capacity, Available):
+            return None
+        now = self._clock.now()
+        turns = self._ledger.turns
+        projection = forecast(
+            capacity,
+            turns_spent=turns,
+            max_turns=self._budget.max_turns,
+            dollars_spent=self._ledger.dollars,
+            max_dollars=self._budget.max_dollars,
+            observed=BurnRate(
+                turns=turns,
+                elapsed_seconds=self._ledger.elapsed.total_seconds(),
+                dollars=self._ledger.dollars,
+            ),
+            capacity_as_of=now,
+            now=now,
+            policy=self._wind_down_policy,
+        )
+        self._log.debug(
+            "capacity.forecast",
+            headroom=projection.binding.fraction,
+            source=projection.binding.source,
+            turns_until_exhaustion=projection.turns_until_exhaustion,
+        )
+        return should_wind_down(projection, self._wind_down_policy, turns_spent=turns)
+
+    def _write_handoff_marker(
+        self, decision: WindDownAndFinish, thread_id: str | None, remaining: list[str]
+    ) -> None:
+        """Written last, after the summary and state it names, so that a marker
+        on disk means everything it points at is on disk."""
+        if self._handoff_marker_writer is None:
+            return
+        binding = decision.forecast.binding
+        self._handoff_marker_writer(
+            HandoffMarker(
+                run_id=self._run_id,
+                reason=decision.reason,
+                produced_at=self._clock.now(),
+                headroom=binding.fraction,
+                headroom_source=binding.source,
+                resets_at=binding.resets_at,
+                session_id=thread_id,
+                turns_spent=self._ledger.turns,
+                dollars_spent=self._ledger.dollars,
+                remaining_work=tuple(remaining),
+            )
+        )
 
 
 def _permission_mode(sandbox: SandboxMode) -> PermissionMode:

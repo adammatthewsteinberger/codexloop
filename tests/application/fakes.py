@@ -172,6 +172,9 @@ class FakeLogger:
         child._bound = {**self._bound, **kwargs}
         return child
 
+    def debug(self, event: str, **kwargs: object) -> None:
+        self.events.append(("debug", event, kwargs))
+
     def info(self, event: str, **kwargs: object) -> None:
         self.events.append(("info", event, dict(kwargs)))
 

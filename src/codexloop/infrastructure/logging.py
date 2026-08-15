@@ -115,6 +115,9 @@ class StructlogAppLogger:
     def bind(self, **kwargs: object) -> Logger:
         return StructlogAppLogger(self._log.bind(**kwargs))
 
+    def debug(self, event: str, **kwargs: object) -> None:
+        self._log.debug(event, **kwargs)
+
     def info(self, event: str, **kwargs: object) -> None:
         self._log.info(event, **kwargs)
 
