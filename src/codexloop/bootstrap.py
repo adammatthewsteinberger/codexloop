@@ -22,6 +22,7 @@ from codexloop.domain.control import ControlCommand, Stop
 from codexloop.domain.errors import ConfigurationError
 from codexloop.domain.savepoint import SavePointRef, UnwindResult
 from codexloop.domain.session import ThreadRef
+from codexloop.domain.verbosity import LogPlan
 from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
 from codexloop.infrastructure.agent.argv import ExecOpts
 from codexloop.infrastructure.agent.gateway import CodexExecGateway
@@ -37,7 +38,10 @@ from codexloop.infrastructure.control import CompositeRunControl, FileRunControl
 from codexloop.infrastructure.doctor_env import CodexDoctorEnvironment
 from codexloop.infrastructure.git_savepoints import GitSavePointStore
 from codexloop.infrastructure.lock import AdvisoryFileLock
-from codexloop.infrastructure.logging import configure_logging
+from codexloop.infrastructure.logging import (
+    apply_third_party_level,
+    configure_logging,
+)
 from codexloop.infrastructure.notify import CommandNotifier
 from codexloop.infrastructure.progress import LoggingProgressReporter
 from codexloop.infrastructure.rollout import read_rollout_rate_limits
@@ -462,3 +466,9 @@ def run_stream_ui_for_events(path: Path) -> None:
 
 def events_path_for_run(run_id: str | None = None, *, cwd: Path | None = None) -> Path:
     return _run_directory(run_id, cwd=cwd).events_path
+
+
+def configure_cli_logging(*, plan: LogPlan, log_file: Path | None = None) -> None:
+    """Apply the resolved -v / -q / --log-level plan to this process."""
+    configure_logging(level=plan.level, log_file=log_file)
+    apply_third_party_level(plan)
