@@ -188,6 +188,7 @@ def build_runner(
     cwd: Path | None = None,
     flags: Mapping[str, object] | None = None,
     ensure_run: bool = True,
+    run_id: str | None = None,
 ) -> RunnerContext:
     """Wire ports for one CLI invocation. ``cli/`` must not import infrastructure."""
     cwd = Path.cwd() if cwd is None else cwd
@@ -201,7 +202,9 @@ def build_runner(
     )
 
     runs_root = runs_root_for(cwd)
-    rundir: RunDirectory | None = RunDirectory.create(runs_root) if ensure_run else None
+    rundir: RunDirectory | None = (
+        RunDirectory.create(runs_root, run_id=run_id) if ensure_run else None
+    )
     clock = SystemClock()
 
     def write_artifact(name: str, content: str) -> None:
