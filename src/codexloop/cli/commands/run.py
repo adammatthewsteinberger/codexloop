@@ -21,6 +21,11 @@ async def run(
         readable=True,
         help="Markdown work plan.",
     ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Name this run instead of generating an id (lets a supervisor attach mid-run).",
+    ),
     transport: str = typer.Option(
         "exec",
         "--transport",
@@ -41,7 +46,11 @@ async def run(
         "max_turns": max_turns,
         "max_wait": max_wait,
     }
-    ctx = build_runner(transport=transport, flags=flags)
+    try:
+        ctx = build_runner(transport=transport, flags=flags, run_id=run_id)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
     text = plan.read_text(encoding="utf-8")
     result = await run_plan(ctx, PlanFile(str(plan)), text)
     typer.echo(render_result(result))

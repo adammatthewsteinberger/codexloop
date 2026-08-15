@@ -173,3 +173,16 @@ forbidden_modules = [
     "docker",
     "sqlalchemy",
 ]
+
+
+[[tool.importlinter.contracts]]
+name = "Interfaces declare seams, never consume them"
+type = "forbidden"
+source_modules = ["codexloop.application.interfaces"]
+forbidden_modules = [
+    "codexloop.application.runner",
+    "codexloop.application.usecases",
+    "codexloop.infrastructure",
+    "codexloop.cli",
+    "codexloop.bootstrap",
+]

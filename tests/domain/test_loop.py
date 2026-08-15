@@ -21,6 +21,7 @@ from codexloop.domain.capacity import (
 )
 from codexloop.domain.completion import Blocked, Continue, Done
 from codexloop.domain.control import Prompt, PromptTiming, Snapshot, Stop
+from codexloop.domain.forecast import CapacityForecast, Headroom, WindDown
 from codexloop.domain.loop import (
     BackoffUntil,
     Decision,
@@ -32,6 +33,7 @@ from codexloop.domain.loop import (
     RunState,
     SendTurn,
     WaitUntil,
+    WindDownAndFinish,
 )
 
 NOW = datetime(2026, 8, 13, 12, 0, tzinfo=UTC)
@@ -618,11 +620,14 @@ def test_run_state_members_match_the_closed_set() -> None:
         "Stopping",
         "Complete",
         "Failed",
+        "Handoff",
     ]
 
 
 def test_decision_is_the_closed_union() -> None:
-    assert Decision == (SendTurn | Probe | WaitUntil | BackoffUntil | Finish | Drain)
+    assert Decision == (
+        SendTurn | Probe | WaitUntil | BackoffUntil | Finish | Drain | WindDownAndFinish
+    )
 
 
 def test_loop_outcome_is_frozen_slots() -> None:
@@ -631,3 +636,70 @@ def test_loop_outcome_is_frozen_slots() -> None:
     assert outcome.__dataclass_params__.slots is True
     assert outcome.completion is None
     assert outcome.deadline_exceeded is False
+    assert outcome.wind_down is None
+
+
+def test_handoff_is_terminal_for_this_process() -> None:
+    """Advancing out of Handoff would restart a run that has already handed
+    its work over."""
+    machine = RunLoopStateMachine()
+    state, decision = machine.advance(
+        RunState.Handoff,
+        LoopOutcome(capacity=Available()),
+        NOW,
+        BudgetLedger(Budget(None, None, None)),
+        [],
+    )
+    assert state is RunState.Handoff
+    assert isinstance(decision, Finish)
+    assert decision.success is False
+    assert decision.reason == "handoff"
+
+
+def test_a_wind_down_yields_the_handoff_decision_after_a_continue() -> None:
+    machine = RunLoopStateMachine()
+    headroom = Headroom(0.05, "window:primary", NOW)
+    wind_down = WindDown(
+        reason="headroom:window:primary",
+        forecast=CapacityForecast(
+            binding=headroom,
+            dimensions=(headroom,),
+            turns_until_exhaustion=None,
+            seconds_until_reset=None,
+        ),
+    )
+    state, decision = machine.advance(
+        RunState.Running,
+        LoopOutcome(capacity=Available(), completion=Continue(remaining=()), wind_down=wind_down),
+        NOW,
+        BudgetLedger(Budget(None, None, None)),
+        [],
+    )
+    assert state is RunState.Handoff
+    assert isinstance(decision, WindDownAndFinish)
+    assert decision.reason == "headroom:window:primary"
+
+
+def test_done_still_outranks_a_wind_down() -> None:
+    """Never turn a completed run into a handoff."""
+    machine = RunLoopStateMachine()
+    headroom = Headroom(0.01, "window:primary", NOW)
+    wind_down = WindDown(
+        reason="headroom:window:primary",
+        forecast=CapacityForecast(
+            binding=headroom,
+            dimensions=(headroom,),
+            turns_until_exhaustion=None,
+            seconds_until_reset=None,
+        ),
+    )
+    state, decision = machine.advance(
+        RunState.Running,
+        LoopOutcome(capacity=Available(), completion=Done(), wind_down=wind_down),
+        NOW,
+        BudgetLedger(Budget(None, None, None)),
+        [],
+    )
+    assert state is RunState.Complete
+    assert isinstance(decision, Finish)
+    assert decision.success is True

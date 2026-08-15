@@ -4,9 +4,28 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+
+RUN_ID_PATTERN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+
+
+def validate_run_id(run_id: str) -> str:
+    """Reject run ids that would escape or hide inside ``runs/``.
+
+    A caller-supplied run id becomes a path segment, so ``../..`` or an
+    absolute path would write outside the runs root. Leading dots are refused
+    too, so a run can never be created hidden.
+    """
+    candidate = run_id.strip()
+    if not RUN_ID_PATTERN.match(candidate):
+        raise ValueError(
+            f"invalid run id {run_id!r}: must be 1-128 characters of "
+            "letters, digits, '.', '_' or '-', and start with a letter or digit"
+        )
+    return candidate
 
 
 class RunDirectory:
@@ -25,8 +44,14 @@ class RunDirectory:
 
     @classmethod
     def create(cls, runs_root: Path, *, run_id: str | None = None) -> RunDirectory:
-        if run_id is None:
-            run_id = str(uuid.uuid4())
+        """Create -- or reopen -- a run directory.
+
+        Unlike the sibling runners, this is deliberately idempotent: a
+        supplied ``run_id`` that already exists is reopened with its contents
+        intact (see ``test_create_is_idempotent``). Callers that need
+        "must be fresh" have to check first.
+        """
+        run_id = str(uuid.uuid4()) if run_id is None else validate_run_id(run_id)
         directory = cls(runs_root / run_id)
         directory.ensure_layout()
         return directory
