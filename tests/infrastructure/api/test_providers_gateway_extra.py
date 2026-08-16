@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import pytest
 
@@ -35,7 +36,7 @@ def test_azure_and_custom_clients(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("OPENAI_BASE_URL", "https://example.test/v1")
     custom = build_client("custom")
-    assert str(custom.base_url).startswith("https://example.test")
+    assert urlparse(str(custom.base_url)).hostname == "example.test"
 
     with_url = build_client("openai", base_url="https://override.test/v1")
     assert "override.test" in str(with_url.base_url)
