@@ -1,0 +1,14 @@
+"""Permission vocabulary shared across the seam, so vendor CLI flag strings
+never leak up into the application layer."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class PermissionMode(StrEnum):
+    """Autonomy posture at the application boundary — not Codex CLI flag strings."""
+
+    AUTONOMOUS = "autonomous"
+    READ_ONLY = "read_only"
+    FULL_ACCESS = "full_access"

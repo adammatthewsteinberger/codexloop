@@ -35,7 +35,17 @@ jobs:
       - run: lint-imports
       - run: bandit -q -r src/codexloop
       - run: pip-audit
-      - run: pytest --cov-report=term-missing
+      # Per layer, not in aggregate: a blanket floor lets a well-tested domain
+      # hide an untested adapter. pytest-cov unions --cov scopes within one
+      # invocation, so each floor needs its own run.
+      - name: Coverage floor - domain (100%)
+        run: pytest -q --cov=codexloop.domain --cov-fail-under=100
+      - name: Coverage floor - application (100%)
+        run: pytest -q --cov=codexloop.application --cov-fail-under=100
+      - name: Coverage floor - infrastructure (100%)
+        run: pytest -q --cov=codexloop.infrastructure --cov-fail-under=100
+      - name: Coverage floor - cli (100%)
+        run: pytest -q --cov=codexloop.cli --cov-fail-under=100
 
   docs:
     name: MkDocs builds strictly
@@ -48,6 +58,19 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[docs]"
       - run: mkdocs build --strict
+
+  uv-lock:
+    name: uv.lock is in sync with pyproject.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv lock --check
 
   build:
     name: Package builds and is installable

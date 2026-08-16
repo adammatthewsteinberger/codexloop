@@ -7,9 +7,11 @@ Registered in pyproject.toml as:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
-from codexloop import __version__
+from codexloop import __version__, bootstrap
 from codexloop.bootstrap import build_api_typer_app
 from codexloop.cli.commands.approval_cmd import approval_cmd
 from codexloop.cli.commands.capacity import capacity
@@ -31,6 +33,7 @@ from codexloop.cli.commands.stop import stop
 from codexloop.cli.commands.threads import threads
 from codexloop.cli.commands.unwind import unwind
 from codexloop.cli.commands.watch import watch
+from codexloop.domain.verbosity import resolve_log_plan
 
 app = typer.Typer(
     name="codexloop",
@@ -59,8 +62,28 @@ def main_callback(
         is_eager=True,
         help="Show the installed codexloop version and exit.",
     ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="More detail: -v debug, -vv also third-party libraries, -vvv full payloads.",
+    ),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Warnings and errors only."),
+    log_level: str | None = typer.Option(
+        None, "--log-level", help="DEBUG, INFO, WARNING, ERROR or CRITICAL. Overrides -v."
+    ),
+    log_file: Path | None = typer.Option(
+        None, "--log-file", help="Also write redacted JSON lines to this file."
+    ),
 ) -> None:
     del version
+    try:
+        plan = resolve_log_plan(verbose=verbose, quiet=quiet, log_level=log_level)
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    bootstrap.configure_cli_logging(plan=plan, log_file=log_file)
 
 
 app.command()(run)

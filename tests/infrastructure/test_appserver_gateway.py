@@ -7,6 +7,8 @@ import os
 import sys
 from pathlib import Path
 
+import anyio
+
 from codexloop.infrastructure.appserver.gateway import (
     CodexAppServerGateway,
     _PendingTurn,
@@ -46,6 +48,12 @@ def _methods(tmp_path: Path) -> list[str]:
     return out
 
 
+async def _wait_for_method(tmp_path: Path, method: str) -> None:
+    with anyio.fail_after(1):
+        while method not in _methods(tmp_path):
+            await anyio.sleep(0.01)
+
+
 async def test_send_turn_starts_thread_and_completes(tmp_path: Path) -> None:
     gw = _gateway(tmp_path)
     try:
@@ -54,6 +62,7 @@ async def test_send_turn_starts_thread_and_completes(tmp_path: Path) -> None:
         assert outcome.signals is not None
         assert outcome.signals.completed is True
         assert outcome.signals.final_message == "hello-from-appserver"
+        await _wait_for_method(tmp_path, "approval/respond")
         methods = _methods(tmp_path)
         assert "initialize" in methods
         assert "thread/start" in methods

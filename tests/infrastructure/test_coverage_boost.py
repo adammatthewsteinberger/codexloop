@@ -162,7 +162,11 @@ def test_git_savepoints_list_unwind_and_errors(tmp_path: Path) -> None:
     assert result3.to.label == "turn"
 
     with pytest.raises(ValueError, match="numbered"):
-        store.unwind(run_id="r1", to="99", backup=False, live=False)
+        # Longer than any real SHA, so it can never accidentally match via
+        # the sha.startswith() fallback -- a short literal like "99" has a
+        # real (if small) chance of prefix-matching one of the SHAs created
+        # above, which intermittently failed this exact assertion in CI.
+        store.unwind(run_id="r1", to="9" * 50, backup=False, live=False)
     with pytest.raises(ValueError, match="matching"):
         store.unwind(run_id="r1", to="nope", backup=False, live=False)
 

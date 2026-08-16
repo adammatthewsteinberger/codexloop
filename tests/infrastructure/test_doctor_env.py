@@ -151,3 +151,39 @@ def test_doctor_app_server_probe_handles_failures(tmp_path: Path) -> None:
         mcp_servers=lambda: (),
     )
     assert env_timeout.diagnose(cwd=tmp_path).probe_strategies["app-server"] is False
+
+
+def _quiet_env(tmp_path: Path, environ: dict[str, str]) -> CodexDoctorEnvironment:
+    return CodexDoctorEnvironment(
+        environ=environ,
+        which=lambda name: None,
+        run=lambda argv, timeout=10: _Proc(1, ""),  # type: ignore[arg-type,misc]
+        home=tmp_path,
+        minimum_version=(0, 40, 0),
+    )
+
+
+def test_auth_mode_reads_the_chatgpt_plan_credential_file(tmp_path: Path) -> None:
+    """Covered on a developer machine by accident -- ~/.codex/auth.json exists
+    there and not on a fresh runner. `home` is injected so the branch is
+    exercised deterministically instead."""
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text("{}", encoding="utf-8")
+
+    assert _quiet_env(tmp_path, {})._auth_mode() == "chatgpt_plan"
+
+
+def test_auth_mode_is_none_when_there_is_neither_key_nor_credential_file(
+    tmp_path: Path,
+) -> None:
+    assert _quiet_env(tmp_path, {})._auth_mode() == "none"
+
+
+def test_an_api_key_outranks_the_credential_file(tmp_path: Path) -> None:
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text("{}", encoding="utf-8")
+
+    assert _quiet_env(tmp_path, {"OPENAI_API_KEY": "sk-test"})._auth_mode() == "api_key"
+    assert _quiet_env(tmp_path, {"CODEX_API_KEY": "sk-test"})._auth_mode() == "api_key"

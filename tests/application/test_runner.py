@@ -13,6 +13,8 @@ from codexloop.domain.budget import Budget
 from codexloop.domain.capacity import AuthFailed, Available, ThrottleExhausted, WindowExhausted
 from codexloop.domain.completion import DEFAULT_DONE_MARKER
 from codexloop.domain.control import Stop
+from codexloop.domain.forecast import WindDownPolicy
+from codexloop.domain.handoff_marker import HandoffMarker
 from codexloop.domain.session import Explicit, MostRecent, PlanFile, ThreadRef
 from codexloop.domain.signals import TurnSignals
 from codexloop.domain.waiting import AdaptiveWaitPolicy, WaitConfig
@@ -85,6 +87,9 @@ def make_ctx(
     turn_elapsed: timedelta | None = None,
     max_wait: timedelta | None = None,
     clock: FakeClock | None = None,
+    handoff_marker_writer: object | None = None,
+    wind_down_policy: WindDownPolicy | None = None,
+    logger: object | None = None,
 ) -> tuple[RunnerContext, FakeAgentGateway, FakeClock, FakeSleeper, FakeRunStateStore]:
     clock = clock or FakeClock(NOW)
     log = call_log
@@ -104,6 +109,9 @@ def make_ctx(
         budget=budget or Budget(max_turns=None, max_dollars=None, max_wall_clock=None),
         wait_policy=ZERO_JITTER,
         max_wait=max_wait,
+        handoff_marker_writer=handoff_marker_writer,  # type: ignore[arg-type]
+        wind_down_policy=wind_down_policy or WindDownPolicy(),
+        logger=logger,  # type: ignore[arg-type]
     )
     return ctx, gateway, clock, sleeper, store_obj
 
@@ -640,3 +648,61 @@ async def test_fatal_error_type_alone_blocks_run() -> None:
     assert result.success is False
     assert result.reason == "invalid_prompt"
     assert gateway.sent_prompts == [PLAN]
+
+
+async def test_a_wind_down_hands_off_instead_of_finishing() -> None:
+    """A supervisor has to tell "resume me elsewhere" from "this is done"."""
+    markers: list[HandoffMarker] = []
+    ctx, _gateway, _clock, _sleeper, _store = make_ctx(
+        outcomes=[_continue(["finish the thing"]), _done()],
+        # One turn of headroom against a reserve of two: the first completed
+        # turn is already inside the reserve.
+        budget=Budget(max_turns=2, max_dollars=10.0, max_wall_clock=None),
+        handoff_marker_writer=markers.append,
+        wind_down_policy=WindDownPolicy(enabled=True),
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is False
+    assert result.reason.startswith("wind-down:")
+    assert markers and markers[0].reason == "turn_reserve"
+    assert markers[0].remaining_work is not None
+
+
+async def test_a_wind_down_without_a_marker_writer_still_finishes() -> None:
+    """No writer means no marker, which is the honest signal: a supervisor that
+    finds no handoff.json falls back to the reactive path."""
+    ctx, _gateway, _clock, _sleeper, _store = make_ctx(
+        outcomes=[_continue(["finish the thing"]), _done()],
+        budget=Budget(max_turns=2, max_dollars=10.0, max_wall_clock=None),
+        wind_down_policy=WindDownPolicy(enabled=True),
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is False
+    assert "wind-down" in result.reason
+
+
+async def test_the_policy_off_leaves_the_run_untouched() -> None:
+    """The predictive path is strictly additive."""
+    ctx, _gateway, _clock, _sleeper, _store = make_ctx(
+        outcomes=[_done()],
+        budget=Budget(max_turns=2, max_dollars=10.0, max_wall_clock=None),
+    )
+
+    result = await AutonomousRunner(ctx).run(PlanFile("plan.md"), PLAN)
+
+    assert result.success is True
+
+
+async def test_diagnostics_are_optional() -> None:
+    """A run must not require a logger to be wired; the null logger absorbs
+    every level rather than the runner branching on whether one exists."""
+    from codexloop.application.runner import _NullLogger
+
+    null = _NullLogger()
+    assert null.bind(run_id="r") is null
+    for level in ("debug", "info", "warning", "error"):
+        getattr(null, level)("event", key="value")

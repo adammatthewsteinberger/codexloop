@@ -12,6 +12,7 @@ import structlog
 from structlog.stdlib import BoundLogger, LoggerFactory, ProcessorFormatter
 
 from codexloop.application.ports import Logger
+from codexloop.domain.verbosity import LogPlan
 from codexloop.infrastructure.redact import redact
 
 
@@ -114,6 +115,9 @@ class StructlogAppLogger:
     def bind(self, **kwargs: object) -> Logger:
         return StructlogAppLogger(self._log.bind(**kwargs))
 
+    def debug(self, event: str, **kwargs: object) -> None:
+        self._log.debug(event, **kwargs)
+
     def info(self, event: str, **kwargs: object) -> None:
         self._log.info(event, **kwargs)
 
@@ -122,3 +126,20 @@ class StructlogAppLogger:
 
     def error(self, event: str, **kwargs: object) -> None:
         self._log.error(event, **kwargs)
+
+
+# Chatty libraries that are noise unless the operator explicitly widened the
+# net with -vv.
+_THIRD_PARTY_LOGGERS = ("openai", "httpx", "httpcore", "anyio", "asyncio", "textual")
+
+
+def apply_third_party_level(plan: LogPlan) -> None:
+    """Raise third-party loggers' floor unless -vv asked for them.
+
+    Raising the floor rather than removing their handlers keeps a genuine
+    library error visible at any verbosity.
+    """
+    level_value = getattr(logging, plan.level, logging.INFO)
+    target = level_value if plan.include_third_party else max(level_value, logging.WARNING)
+    for name in _THIRD_PARTY_LOGGERS:
+        logging.getLogger(name).setLevel(target)
