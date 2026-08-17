@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+
+from codexloop.domain.handoff_marker import HANDOFF_MARKER_FILENAME, HandoffMarker
 
 RUN_ID_PATTERN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 
@@ -80,3 +83,20 @@ class RunDirectory:
 
 def runs_root_for(cwd: Path) -> Path:
     return cwd / ".codexloop" / "runs"
+
+
+def write_handoff_marker(run_root: Path, marker: HandoffMarker) -> None:
+    """Write handoff marker to runs/<run_id>/handoff.json.
+
+    Uses temp-file + os.replace for crash-safety: if the write fails mid-way,
+    any existing marker is left intact. The final marker file only appears
+    after the entire payload is written to disk.
+    """
+    marker_path = run_root / HANDOFF_MARKER_FILENAME
+    temp_path = run_root / f".{HANDOFF_MARKER_FILENAME}.{time.time_ns()}.tmp"
+
+    # Write to temp file first
+    temp_path.write_text(marker.to_json(), encoding="utf-8")
+
+    # Atomic rename to final destination
+    os.replace(temp_path, marker_path)

@@ -45,7 +45,7 @@ from codexloop.infrastructure.logging import (
 from codexloop.infrastructure.notify import CommandNotifier
 from codexloop.infrastructure.progress import LoggingProgressReporter
 from codexloop.infrastructure.rollout import read_rollout_rate_limits
-from codexloop.infrastructure.rundir import RunDirectory, runs_root_for
+from codexloop.infrastructure.rundir import RunDirectory, runs_root_for, write_handoff_marker
 from codexloop.infrastructure.snapshot import create_snapshot, restore_snapshot
 from codexloop.infrastructure.state import FileRunStateStore
 from codexloop.infrastructure.state_bus import read_state
@@ -249,8 +249,10 @@ def build_runner(
     if rundir is not None:
         inbox = FileRunControl(rundir.inbox)
         control: DrainControl | CompositeRunControl = CompositeRunControl(drain, inbox)
+        handoff_writer = lambda marker: write_handoff_marker(rundir.root, marker)
     else:
         control = drain
+        handoff_writer = None
 
     return RunnerContext(
         clock=clock,
@@ -267,6 +269,7 @@ def build_runner(
         budget=Budget(max_turns=config.max_turns, max_dollars=None, max_wall_clock=None),
         wait_policy=wait_policy,
         max_wait=config.max_wait,
+        handoff_marker_writer=handoff_writer,
         run_id=rundir.run_id if rundir is not None else "anonymous",
         cwd=str(cwd),
         model=config.model or "codex-default",
