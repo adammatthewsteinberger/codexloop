@@ -313,15 +313,15 @@ on the JSONL alone turns a malformed stream into an unexplained failure (R4):
 ```python
 @dataclass(frozen=True)
 class TurnSignals:
-    error_code: str | None          # from turn.failed / error events
+    error_code: str | None  # from turn.failed / error events
     error_type: str | None
     error_message: str | None
     http_status: int | None
-    retry_after: timedelta | None   # Retry-After header when the path exposes it (R2)
-    ratelimit_headers: Mapping[str, str]        # x-ratelimit-* when available (R2)
-    window_snapshot: WindowSnapshot | None      # x-codex-* / token_count payload (R3)
-    exit_code: int | None           # the process exit code — a second signal (R4)
-    stderr_tail: str | None         # human-formatted diagnostics (R4)
+    retry_after: timedelta | None  # Retry-After header when the path exposes it (R2)
+    ratelimit_headers: Mapping[str, str]  # x-ratelimit-* when available (R2)
+    window_snapshot: WindowSnapshot | None  # x-codex-* / token_count payload (R3)
+    exit_code: int | None  # the process exit code — a second signal (R4)
+    stderr_tail: str | None  # human-formatted diagnostics (R4)
     finish_reason: str | None
 ```
 
