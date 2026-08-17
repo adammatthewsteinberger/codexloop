@@ -1,9 +1,5 @@
----
-description: Run and debug codexloop autonomous sessions.
-alwaysApply: false
----
+# codexloop-run (Antigravity mirror of `.claude/skills/codexloop-run/SKILL.md`)
 
-> **Cursor rule mirror** of `.claude/skills/codexloop-run/SKILL.md`. When this guidance changes, update Claude, Cursor, Codex, and Antigravity in the same PR.
 
 # codexloop-run
 
