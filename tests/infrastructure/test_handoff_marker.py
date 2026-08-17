@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -96,9 +95,11 @@ def test_write_handoff_marker_preserves_prior_file_on_failure(tmp_path: Path) ->
         turns_spent=5,
     )
 
-    with patch("os.replace", side_effect=OSError("disk full")):
-        with pytest.raises(OSError, match="disk full"):
-            write_handoff_marker(run_root, new_marker)
+    with (
+        patch("os.replace", side_effect=OSError("disk full")),
+        pytest.raises(OSError, match="disk full"),
+    ):
+        write_handoff_marker(run_root, new_marker)
 
     # Verify original file is still intact
     preserved_content = marker_path.read_text(encoding="utf-8")

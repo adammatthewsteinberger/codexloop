@@ -296,6 +296,8 @@ class AutonomousRunner:
             match command:
                 case Stop():
                     continue
+                case WindDownCommand():
+                    continue  # Handled by the state machine, not here
                 case Prompt(text=text):
                     self._queued_prompt = text
                 case SetModel(model=model):

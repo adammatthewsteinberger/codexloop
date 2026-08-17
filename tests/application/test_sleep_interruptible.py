@@ -22,8 +22,9 @@ from tests.application.fakes import (
 async def test_sleep_interruptible_returns_stop_when_stop_arrives() -> None:
     """If a Stop command arrives during sleep, return 'stop' early."""
     clock = FakeClock(datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC))
-    sleeper = FakeSleeper()
-    control = FakeRunControl([])
+    sleeper = FakeSleeper(clock)
+    # First poll returns empty, second poll returns Stop
+    control = FakeRunControl(script=[[], [Stop()]])
 
     ctx = RunnerContext(
         clock=clock,
@@ -35,10 +36,7 @@ async def test_sleep_interruptible_returns_stop_when_stop_arrives() -> None:
     )
     runner = AutonomousRunner(ctx)
 
-    # Enqueue a stop command that will be polled during sleep
-    control.inject(Stop())
-
-    # Sleep for 10 seconds - should return early with "stop"
+    # Sleep for 10 seconds - should return early with "stop" when polled
     target = clock.now() + timedelta(seconds=10)
     result = await runner._sleep_interruptible(target)
 
@@ -51,8 +49,9 @@ async def test_sleep_interruptible_returns_stop_when_stop_arrives() -> None:
 async def test_sleep_interruptible_returns_wind_down_when_wind_down_arrives() -> None:
     """If a WindDownCommand arrives during sleep, return 'wind_down' early."""
     clock = FakeClock(datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC))
-    sleeper = FakeSleeper()
-    control = FakeRunControl([])
+    sleeper = FakeSleeper(clock)
+    # First poll returns empty, second poll returns WindDownCommand
+    control = FakeRunControl(script=[[], [WindDownCommand(reason="capacity")]])
 
     ctx = RunnerContext(
         clock=clock,
@@ -63,9 +62,6 @@ async def test_sleep_interruptible_returns_wind_down_when_wind_down_arrives() ->
         control=control,
     )
     runner = AutonomousRunner(ctx)
-
-    # Enqueue a wind-down command
-    control.inject(WindDownCommand(reason="capacity"))
 
     # Sleep for 10 seconds - should return early with "wind_down"
     target = clock.now() + timedelta(seconds=10)
@@ -80,7 +76,7 @@ async def test_sleep_interruptible_returns_wind_down_when_wind_down_arrives() ->
 async def test_sleep_interruptible_returns_none_when_no_interrupt() -> None:
     """If no interrupt arrives, sleep completes and returns None."""
     clock = FakeClock(datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC))
-    sleeper = FakeSleeper()
+    sleeper = FakeSleeper(clock)
     control = FakeRunControl([])
 
     ctx = RunnerContext(
@@ -106,8 +102,7 @@ async def test_sleep_interruptible_returns_none_when_no_interrupt() -> None:
 async def test_sleep_interruptible_polls_periodically() -> None:
     """Sleep polls control inbox periodically during the wait."""
     clock = FakeClock(datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC))
-    sleeper = FakeSleeper()
-    control = FakeRunControl([])
+    sleeper = FakeSleeper(clock)
     poll_count = 0
 
     class CountingControl(FakeRunControl):

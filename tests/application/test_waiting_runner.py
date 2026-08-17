@@ -118,8 +118,9 @@ async def test_window_exhausted_probes_at_interval_not_five_hour_sleep() -> None
 
     assert result.success is True
     assert sleeper.requested
-    assert sleeper.requested[0] == NOW + WINDOW_INTERVAL
-    assert sleeper.requested[0] < reset_at
+    # _sleep_interruptible polls every 1 second, so first sleep is 1s, not full interval
+    assert sleeper.requested[0] <= NOW + WINDOW_INTERVAL
+    assert sleeper.requested[0] > NOW  # Should have slept at least once
     assert clock.now() < reset_at
     assert gateway.sent_prompts == [PLAN]
 
@@ -169,7 +170,9 @@ async def test_unknown_code_429_bounded_wait_and_reports() -> None:
         assert when <= cursor + QUOTA_CEILING
         if when > cursor:
             cursor = when
-    assert sleeper.requested[0] == NOW + WaitConfig().quota_probe_base
+    # _sleep_interruptible polls every 1 second, so first sleep is 1s, not full base
+    assert sleeper.requested[0] <= NOW + WaitConfig().quota_probe_base
+    assert sleeper.requested[0] > NOW  # Should have slept at least once
     names = [event for event, _detail in reporter.events]
     assert "capacity.unknown_code" in names
     unknown = next(detail for event, detail in reporter.events if event == "capacity.unknown_code")

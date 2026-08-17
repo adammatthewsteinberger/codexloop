@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -20,6 +20,7 @@ from codexloop.domain.budget import Budget
 from codexloop.domain.capacity import PlanWindows
 from codexloop.domain.control import ControlCommand, Stop
 from codexloop.domain.errors import ConfigurationError
+from codexloop.domain.handoff_marker import HandoffMarker
 from codexloop.domain.savepoint import SavePointRef, UnwindResult
 from codexloop.domain.session import ThreadRef
 from codexloop.domain.verbosity import LogPlan
@@ -249,10 +250,14 @@ def build_runner(
     if rundir is not None:
         inbox = FileRunControl(rundir.inbox)
         control: DrainControl | CompositeRunControl = CompositeRunControl(drain, inbox)
-        handoff_writer = lambda marker: write_handoff_marker(rundir.root, marker)
+
+        def handoff_writer(marker: HandoffMarker) -> None:
+            write_handoff_marker(rundir.root, marker)
+
+        handoff_marker_writer: Callable[[HandoffMarker], None] | None = handoff_writer
     else:
         control = drain
-        handoff_writer = None
+        handoff_marker_writer = None
 
     return RunnerContext(
         clock=clock,
@@ -269,7 +274,7 @@ def build_runner(
         budget=Budget(max_turns=config.max_turns, max_dollars=None, max_wall_clock=None),
         wait_policy=wait_policy,
         max_wait=config.max_wait,
-        handoff_marker_writer=handoff_writer,
+        handoff_marker_writer=handoff_marker_writer,
         run_id=rundir.run_id if rundir is not None else "anonymous",
         cwd=str(cwd),
         model=config.model or "codex-default",
