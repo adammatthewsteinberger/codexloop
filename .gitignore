@@ -43,6 +43,7 @@ site/
 
 # --- Local run state ---
 .codexloop/
+.claudeloop/
 
 # --- SDD scratch ---
 .superpowers/
