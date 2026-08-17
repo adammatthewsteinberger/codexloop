@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
-from typing import assert_never
+from typing import Literal, assert_never
 
 from codexloop.application.dto import RunResult, TurnOutcome
 from codexloop.application.ports import (
@@ -44,6 +44,7 @@ from codexloop.domain.control import (
     SetSandbox,
     Snapshot,
     Stop,
+    WindDownCommand,
 )
 from codexloop.domain.error_codes import ErrorClass, classify_code
 from codexloop.domain.forecast import (
@@ -238,7 +239,13 @@ class AutonomousRunner:
                             outcome.capacity, self._clock.now(), wait_attempt, deadline
                         )
                         wait_attempt += 1
-                        await self._sleeper.sleep_until(until)
+                        interrupt = await self._sleep_interruptible(until)
+                        if interrupt == "stop":
+                            # Stop immediately - drain will handle on next poll
+                            pass
+                        elif interrupt == "wind_down":
+                            # Wind-down requested - continue to next poll to process it
+                            pass
                     case Drain():
                         self._write_stop_summary(thread_id, remaining)
                         self._persist(
@@ -289,6 +296,8 @@ class AutonomousRunner:
             match command:
                 case Stop():
                     continue
+                case WindDownCommand():
+                    continue  # Handled by the state machine, not here
                 case Prompt(text=text):
                     self._queued_prompt = text
                 case SetModel(model=model):
@@ -514,6 +523,37 @@ class AutonomousRunner:
                 remaining_work=tuple(remaining),
             )
         )
+
+    async def _sleep_interruptible(self, until: datetime) -> None | Literal["stop", "wind_down"]:
+        """Sleep until `until`, polling control inbox and returning early on stop/wind-down.
+
+        Returns:
+            None: sleep completed normally
+            "stop": Stop command received
+            "wind_down": WindDownCommand received
+        """
+        poll_interval = timedelta(seconds=1)
+
+        while True:
+            now = self._clock.now()
+            if now >= until:
+                return None
+
+            # Poll control inbox for interrupts
+            controls = self._control.poll()
+            for cmd in controls:
+                if isinstance(cmd, Stop):
+                    return "stop"
+                if isinstance(cmd, WindDownCommand):
+                    return "wind_down"
+
+            # Apply non-interrupt commands immediately
+            await self._apply_controls(controls)
+
+            # Sleep until next poll or target time, whichever is sooner
+            next_poll = now + poll_interval
+            sleep_until = min(next_poll, until)
+            await self._sleeper.sleep_until(sleep_until)
 
 
 def _permission_mode(sandbox: SandboxMode) -> PermissionMode:

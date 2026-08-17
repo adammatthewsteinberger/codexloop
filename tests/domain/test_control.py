@@ -19,7 +19,9 @@ from codexloop.domain.control import (
     SetSandbox,
     Snapshot,
     Stop,
+    WindDownCommand,
     parse_control,
+    stop_outranks,
 )
 from codexloop.domain.errors import ConfigurationError
 from codexloop.domain.model_profile import Effort
@@ -35,6 +37,7 @@ COMMANDS: tuple[ControlCommand, ...] = (
     SetCwd(cwd="/tmp/proj"),
     Snapshot(),
     ResourceMutate(payload={"cpu": 2, "mem": "4g"}),
+    WindDownCommand(reason="capacity exhausted"),
 )
 
 
@@ -57,6 +60,7 @@ def test_control_command_is_the_inbox_union() -> None:
         | SetCwd
         | Snapshot
         | ResourceMutate
+        | WindDownCommand
     )
     for command in COMMANDS:
         assert isinstance(command, ControlCommand)
@@ -148,3 +152,76 @@ def test_control_variants_are_frozen_slots() -> None:
         params = command.__dataclass_params__
         assert params.frozen is True
         assert params.slots is True
+
+
+def test_wind_down_command_validates_reason() -> None:
+    """WindDownCommand rejects empty reasons."""
+    with pytest.raises(ValueError, match="reason"):
+        WindDownCommand(reason="")
+    with pytest.raises(ValueError, match="reason"):
+        WindDownCommand(reason="   ")
+
+
+def test_wind_down_command_round_trip() -> None:
+    """WindDownCommand serializes to JSON and back."""
+    cmd = WindDownCommand(reason="smoke test")
+    data = cmd.to_dict()
+    assert data == {"kind": "wind_down", "reason": "smoke test"}
+    restored = parse_control(data)
+    assert restored == cmd
+
+
+def test_stop_outranks_prefers_stop_over_wind_down() -> None:
+    """When both stop and wind-down are present, stop wins."""
+    commands = [
+        WindDownCommand(reason="capacity"),
+        SetModel(model="gpt-4"),
+        Stop(),
+        Prompt(text="continue", timing=PromptTiming.NOW),
+    ]
+    result = stop_outranks(commands)
+    # Stop is preserved, wind-down is held but returned separately
+    assert result.commands == [
+        SetModel(model="gpt-4"),
+        Stop(),
+        Prompt(text="continue", timing=PromptTiming.NOW),
+    ]
+    assert result.held_wind_down == WindDownCommand(reason="capacity")
+
+
+def test_stop_outranks_without_stop_returns_all_commands() -> None:
+    """Without a Stop, all commands pass through unchanged."""
+    commands = [
+        WindDownCommand(reason="capacity"),
+        SetModel(model="gpt-4"),
+    ]
+    result = stop_outranks(commands)
+    assert result.commands == commands
+    assert result.held_wind_down is None
+
+
+def test_stop_outranks_without_wind_down_returns_all_commands() -> None:
+    """Without a WindDownCommand, all commands pass through unchanged."""
+    commands = [
+        Stop(),
+        SetModel(model="gpt-4"),
+    ]
+    result = stop_outranks(commands)
+    assert result.commands == commands
+    assert result.held_wind_down is None
+
+
+def test_stop_outranks_with_only_stop_returns_stop() -> None:
+    """A stop alone passes through."""
+    commands = [Stop()]
+    result = stop_outranks(commands)
+    assert result.commands == [Stop()]
+    assert result.held_wind_down is None
+
+
+def test_stop_outranks_with_only_wind_down_returns_wind_down() -> None:
+    """A wind-down alone passes through."""
+    commands = [WindDownCommand(reason="test")]
+    result = stop_outranks(commands)
+    assert result.commands == commands
+    assert result.held_wind_down is None
