@@ -5,7 +5,7 @@ human, distinguishes rate limits from exhausted credits, and resumes safely
 across usage windows.
 
 ```bash
-pipx install .
+pipx install codexloop
 codexloop doctor
 codexloop run plan.md
 ```
