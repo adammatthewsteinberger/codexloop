@@ -351,3 +351,113 @@ async def test_send_turn_unlinks_stale_last_message(
     # Fresh turn clears then rewrites only if the CLI produced output; after a clean
     # fake stream with no last-message write, the stale file must be gone.
     assert not stale.exists() or stale.read_text(encoding="utf-8") != '{"complete": false}\n'
+
+
+class _EventSinkSpy:
+    """Test spy that records emitted events."""
+
+    def __init__(self) -> None:
+        self.events: list[Mapping[str, object]] = []
+
+    def emit(self, event: Mapping[str, object]) -> None:
+        self.events.append(dict(event))
+
+
+async def test_send_turn_emits_events_to_sink_when_provided(
+    fake_codex_on_path: Path,
+    configure_fake_codex: Callable[..., None],
+    tmp_path: Path,
+) -> None:
+    """Regression test: events parsed from codex stdout must be persisted to the sink."""
+    configure_fake_codex(script=JSONL / "tool_heavy.jsonl", mode="stream")
+    sink = _EventSinkSpy()
+    gateway = CodexExecGateway(
+        cwd=tmp_path,
+        env=_env(),
+        timeout=15.0,
+        max_line_bytes=65_536,
+        event_sink=sink,
+    )
+
+    await gateway.send_turn("run tools")
+
+    # tool_heavy has: ThreadStarted, TurnStarted, 4 ItemStarted, 4 ItemCompleted, TurnCompleted
+    assert len(sink.events) >= 10  # at least all the structured events
+    types = [e.get("type") for e in sink.events]
+    assert "thread.started" in types
+    assert "turn.started" in types
+    assert "turn.completed" in types
+    assert types.count("item.started") >= 3
+    assert types.count("item.completed") >= 3
+
+    # Verify thread.started carries thread_id
+    thread_started_events = [e for e in sink.events if e.get("type") == "thread.started"]
+    assert len(thread_started_events) == 1
+    assert thread_started_events[0].get("thread_id") is not None
+
+    # Verify turn.completed carries usage
+    turn_completed_events = [e for e in sink.events if e.get("type") == "turn.completed"]
+    assert len(turn_completed_events) == 1
+    assert turn_completed_events[0].get("usage") is not None
+
+
+async def test_send_turn_skips_unparseable_lines_when_emitting(
+    tmp_path: Path,
+) -> None:
+    """A blank/malformed stdout line parses to None and must be skipped
+    when forwarding to the sink, not emitted or raised on."""
+
+    async def _run(
+        argv: Sequence[str],
+        *,
+        cwd: str | Path,
+        env: Mapping[str, str],
+        timeout: float,
+        max_line_bytes: int,
+    ) -> ProcessResult:
+        del argv, cwd, env, timeout, max_line_bytes
+        return ProcessResult(
+            stdout_lines=[
+                "",
+                '{"type":"turn.started"}',
+            ],
+            stderr_tail="",
+            exit_code=0,
+            truncated_lines=0,
+        )
+
+    sink = _EventSinkSpy()
+    gateway = CodexExecGateway(
+        cwd=tmp_path,
+        env=_env(),
+        run_codex=_run,
+        timeout=15.0,
+        max_line_bytes=65_536,
+        event_sink=sink,
+    )
+
+    await gateway.send_turn("one")
+
+    assert [e.get("type") for e in sink.events] == ["turn.started"]
+
+
+async def test_send_turn_works_without_event_sink(
+    fake_codex_on_path: Path,
+    configure_fake_codex: Callable[..., None],
+    tmp_path: Path,
+) -> None:
+    """Event sink is optional; send_turn must not fail when None."""
+    configure_fake_codex(script=JSONL / "clean_completion.jsonl", mode="stream")
+    gateway = CodexExecGateway(
+        cwd=tmp_path,
+        env=_env(),
+        timeout=15.0,
+        max_line_bytes=65_536,
+        event_sink=None,
+    )
+
+    outcome = await gateway.send_turn("test")
+
+    assert outcome.exit_code == 0
+    assert outcome.signals is not None
+    assert outcome.signals.completed is True
