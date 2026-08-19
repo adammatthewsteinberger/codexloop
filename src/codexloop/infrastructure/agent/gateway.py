@@ -183,9 +183,7 @@ class CodexExecGateway:
         for event in events:
             if event is None:
                 continue
-            payload = _event_to_dict(event)
-            if payload is not None:
-                self._event_sink.emit(payload)
+            self._event_sink.emit(_event_to_dict(event))
 
     def _record_thread_id(self, events: Sequence[CodexEvent | None]) -> None:
         if self._thread_id is not None:
@@ -223,7 +221,7 @@ def _token_usage(usage: object | None) -> TokenUsage | None:
     )
 
 
-def _event_to_dict(event: CodexEvent) -> Mapping[str, object] | None:
+def _event_to_dict(event: CodexEvent) -> Mapping[str, object]:
     """Convert a parsed CodexEvent to the dict payload the sink expects."""
     if isinstance(event, ThreadStarted):
         payload: dict[str, object] = {"type": "thread.started"}
@@ -324,5 +322,7 @@ def _event_to_dict(event: CodexEvent) -> Mapping[str, object] | None:
         # Emit unknown events as-is with their original type string
         return {"type": event.type}
 
-    # Should never reach here given the exhaustive match above
-    return None  # pragma: no cover
+    # Should never reach here given the exhaustive isinstance chain above
+    raise AssertionError(
+        f"unreachable: unexpected CodexEvent variant {event!r}"
+    )  # pragma: no cover

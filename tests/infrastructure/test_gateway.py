@@ -401,6 +401,46 @@ async def test_send_turn_emits_events_to_sink_when_provided(
     assert turn_completed_events[0].get("usage") is not None
 
 
+async def test_send_turn_skips_unparseable_lines_when_emitting(
+    tmp_path: Path,
+) -> None:
+    """A blank/malformed stdout line parses to None and must be skipped
+    when forwarding to the sink, not emitted or raised on."""
+
+    async def _run(
+        argv: Sequence[str],
+        *,
+        cwd: str | Path,
+        env: Mapping[str, str],
+        timeout: float,
+        max_line_bytes: int,
+    ) -> ProcessResult:
+        del argv, cwd, env, timeout, max_line_bytes
+        return ProcessResult(
+            stdout_lines=[
+                "",
+                '{"type":"turn.started"}',
+            ],
+            stderr_tail="",
+            exit_code=0,
+            truncated_lines=0,
+        )
+
+    sink = _EventSinkSpy()
+    gateway = CodexExecGateway(
+        cwd=tmp_path,
+        env=_env(),
+        run_codex=_run,
+        timeout=15.0,
+        max_line_bytes=65_536,
+        event_sink=sink,
+    )
+
+    await gateway.send_turn("one")
+
+    assert [e.get("type") for e in sink.events] == ["turn.started"]
+
+
 async def test_send_turn_works_without_event_sink(
     fake_codex_on_path: Path,
     configure_fake_codex: Callable[..., None],

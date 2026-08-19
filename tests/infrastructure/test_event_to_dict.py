@@ -79,6 +79,19 @@ def test_turn_completed_without_usage() -> None:
     assert result == {"type": "turn.completed"}
 
 
+def test_turn_completed_with_inverse_partial_usage() -> None:
+    """Complements test_turn_completed_with_partial_usage: exercises
+    input_tokens/output_tokens being None while the other two are set."""
+    usage = Usage(cached_input_tokens=50, reasoning_output_tokens=10)
+    event = TurnCompleted(usage=usage)
+    result = _event_to_dict(event)
+    assert result is not None
+    assert result["usage"] == {
+        "cached_input_tokens": 50,
+        "reasoning_output_tokens": 10,
+    }
+
+
 def test_turn_failed_with_error() -> None:
     error = ErrorPayload(
         code="insufficient_quota",
@@ -102,6 +115,15 @@ def test_turn_failed_without_error() -> None:
     event = TurnFailed(error=None)
     result = _event_to_dict(event)
     assert result == {"type": "turn.failed"}
+
+
+def test_turn_failed_with_error_all_fields_none() -> None:
+    """error is present but every one of its fields is None -- exercises
+    the False branch of all four inner `is not None` checks at once."""
+    error = ErrorPayload(code=None, type=None, message=None, status=None)
+    event = TurnFailed(error=error)
+    result = _event_to_dict(event)
+    assert result == {"type": "turn.failed", "error": {}}
 
 
 def test_item_started_with_item() -> None:
@@ -192,6 +214,41 @@ def test_rate_limits_updated_with_only_secondary() -> None:
     assert rate_limits["plan_type"] == "free"
 
 
+def test_rate_limits_updated_primary_without_window_minutes() -> None:
+    """primary is present but window_minutes is None -- no existing test
+    leaves window_minutes unset while primary itself is present."""
+    windows = PlanWindows(
+        primary=RateLimitWindow(used_percent=10.0, window_minutes=None, resets_at=None),
+        secondary=None,
+        plan_type=None,
+        limit_reached=None,
+    )
+    event = RateLimitsUpdated(plan_windows=windows)
+    result = _event_to_dict(event)
+    assert result is not None
+    rate_limits = result["rate_limits"]
+    assert isinstance(rate_limits, dict)
+    assert rate_limits["primary"]["used_percent"] == 10.0
+    assert "window_minutes" not in rate_limits["primary"]
+
+
+def test_rate_limits_updated_secondary_with_all_fields_none() -> None:
+    """secondary is present but every one of its fields is None -- exercises
+    the False branch of all three inner secondary `is not None` checks."""
+    windows = PlanWindows(
+        primary=None,
+        secondary=RateLimitWindow(used_percent=None, window_minutes=None, resets_at=None),
+        plan_type=None,
+        limit_reached=None,
+    )
+    event = RateLimitsUpdated(plan_windows=windows)
+    result = _event_to_dict(event)
+    assert result is not None
+    rate_limits = result["rate_limits"]
+    assert isinstance(rate_limits, dict)
+    assert rate_limits["secondary"] == {}
+
+
 def test_rate_limits_updated_without_windows() -> None:
     event = RateLimitsUpdated(plan_windows=None)
     result = _event_to_dict(event)
@@ -208,6 +265,15 @@ def test_error_event_with_error() -> None:
     assert result["error"]["type"] == "network_error"
     assert result["error"]["message"] == "Timed out"
     assert "status" not in result["error"]
+
+
+def test_error_event_with_only_status() -> None:
+    """Complements test_error_event_with_error: code/type/message are None
+    while status is set, exercising their False branches."""
+    error = ErrorPayload(code=None, type=None, message=None, status=500)
+    event = ErrorEvent(error=error)
+    result = _event_to_dict(event)
+    assert result == {"type": "error", "error": {"status": 500}}
 
 
 def test_error_event_without_error() -> None:
