@@ -12,7 +12,7 @@ from typing import Any
 
 import anyio
 
-from codexloop.application.ports import AgentGateway, CapacityProbe
+from codexloop.application.ports import AgentGateway, CapacityProbe, RunEventSink
 from codexloop.application.runner import RunnerContext
 from codexloop.application.usecases.doctor import DoctorReport, run_doctor
 from codexloop.application.usecases.run_control import enqueue_control
@@ -37,6 +37,7 @@ from codexloop.infrastructure.clock import AnyioSleeper, SystemClock
 from codexloop.infrastructure.config import RunnerConfig, load_config
 from codexloop.infrastructure.control import CompositeRunControl, FileRunControl
 from codexloop.infrastructure.doctor_env import CodexDoctorEnvironment
+from codexloop.infrastructure.events import JsonlRunEventSink
 from codexloop.infrastructure.git_savepoints import GitSavePointStore
 from codexloop.infrastructure.lock import AdvisoryFileLock
 from codexloop.infrastructure.logging import (
@@ -163,7 +164,13 @@ class _JsonThreadCatalog:
         self._save()
 
 
-def _select_gateway(transport: str, *, cwd: Path, config: RunnerConfig) -> AgentGateway:
+def _select_gateway(
+    transport: str,
+    *,
+    cwd: Path,
+    config: RunnerConfig,
+    event_sink: RunEventSink | None = None,
+) -> AgentGateway:
     if transport == "app-server":
 
         async def _probe() -> tuple[AgentGateway | None, str | None]:
@@ -177,12 +184,14 @@ def _select_gateway(transport: str, *, cwd: Path, config: RunnerConfig) -> Agent
         return CodexExecGateway(
             cwd=cwd,
             opts=ExecOpts(prompt="", model=config.model, add_dirs=config.add_dirs),
+            event_sink=event_sink,
         )
     if transport != "exec":
         raise ConfigurationError(f"unknown transport {transport!r}")
     return CodexExecGateway(
         cwd=cwd,
         opts=ExecOpts(prompt="", model=config.model, add_dirs=config.add_dirs),
+        event_sink=event_sink,
     )
 
 
@@ -221,6 +230,12 @@ def build_runner(
     gateway: AgentGateway
     probe: CapacityProbe
     scripted = resolve_test_agent_from_env()
+
+    # Create event sink if we have a run directory
+    event_sink: RunEventSink | None = None
+    if rundir is not None:
+        event_sink = JsonlRunEventSink(rundir.events_path)
+
     if scripted is not None:
         gateway, probe = scripted
         wait_policy = AdaptiveWaitPolicy(
@@ -238,7 +253,7 @@ def build_runner(
             rand=lambda: 0.0,
         )
     else:
-        gateway = _select_gateway(transport, cwd=cwd, config=config)
+        gateway = _select_gateway(transport, cwd=cwd, config=config, event_sink=event_sink)
         probe = CompositeCapacityProbe(
             ExecCapacityProbe(cwd=cwd),
             app_server=app_server.read_rate_limits,
