@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import cast
@@ -89,6 +89,18 @@ class ResourceMutate:
         return {"kind": "resource_mutate", "payload": dict(self.payload)}
 
 
+@dataclass(frozen=True, slots=True)
+class WindDownCommand:
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.reason.strip():
+            raise ValueError("wind-down reason must be non-empty")
+
+    def to_dict(self) -> dict[str, object]:
+        return {"kind": "wind_down", "reason": self.reason}
+
+
 ControlCommand = (
     Stop
     | Prompt
@@ -99,6 +111,7 @@ ControlCommand = (
     | SetCwd
     | Snapshot
     | ResourceMutate
+    | WindDownCommand
 )
 
 
@@ -154,6 +167,10 @@ def _parse_resource_mutate(data: Mapping[str, object]) -> ResourceMutate:
     return ResourceMutate(payload=dict(cast(Mapping[str, object], payload)))
 
 
+def _parse_wind_down(data: Mapping[str, object]) -> WindDownCommand:
+    return WindDownCommand(reason=str(data["reason"]))
+
+
 _BUILDERS: dict[str, Callable[[Mapping[str, object]], ControlCommand]] = {
     "stop": _parse_stop,
     "prompt": _parse_prompt,
@@ -164,4 +181,32 @@ _BUILDERS: dict[str, Callable[[Mapping[str, object]], ControlCommand]] = {
     "set_cwd": _parse_set_cwd,
     "snapshot": _parse_snapshot,
     "resource_mutate": _parse_resource_mutate,
+    "wind_down": _parse_wind_down,
 }
+
+
+@dataclass(frozen=True, slots=True)
+class StopOutranksResult:
+    """Result of stop_outranks: commands to execute and any held wind-down."""
+
+    commands: Sequence[ControlCommand]
+    held_wind_down: WindDownCommand | None
+
+
+def stop_outranks(commands: Sequence[ControlCommand]) -> StopOutranksResult:
+    """Stop always wins, but a pending wind-down is held, not dropped.
+
+    When both Stop and WindDownCommand are present, Stop takes precedence
+    and executes, but the WindDownCommand is preserved separately so it
+    can be requeued or handled after the stop completes.
+    """
+    has_stop = any(isinstance(cmd, Stop) for cmd in commands)
+    wind_down = next((cmd for cmd in commands if isinstance(cmd, WindDownCommand)), None)
+
+    if has_stop and wind_down is not None:
+        # Stop wins: filter out wind-down from commands, but hold it separately
+        filtered = [cmd for cmd in commands if not isinstance(cmd, WindDownCommand)]
+        return StopOutranksResult(commands=filtered, held_wind_down=wind_down)
+
+    # No conflict: return everything as-is
+    return StopOutranksResult(commands=list(commands), held_wind_down=None)

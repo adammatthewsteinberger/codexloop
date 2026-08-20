@@ -33,6 +33,7 @@ from codexloop.cli.commands.stop import stop
 from codexloop.cli.commands.threads import threads
 from codexloop.cli.commands.unwind import unwind
 from codexloop.cli.commands.watch import watch
+from codexloop.cli.commands.wind_down_cmd import wind_down
 from codexloop.domain.verbosity import resolve_log_plan
 
 app = typer.Typer(
@@ -94,6 +95,7 @@ app.command()(logs)
 app.command()(runs)
 app.command()(prompt)
 app.command()(stop)
+app.command(name="wind-down")(wind_down)
 app.command()(capacity)
 app.command()(doctor)
 app.command()(watch)

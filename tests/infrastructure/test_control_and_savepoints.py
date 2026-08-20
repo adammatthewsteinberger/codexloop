@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from codexloop.domain.control import Prompt, PromptTiming, Stop, parse_control
+from codexloop.domain.control import Prompt, PromptTiming, Stop, WindDownCommand, parse_control
 from codexloop.domain.errors import ConfigurationError
 from codexloop.domain.savepoint_message import format_savepoint_commit_message
 from codexloop.infrastructure.control import CompositeRunControl, FileRunControl
@@ -61,6 +61,20 @@ def test_composite_merges_drain_and_inbox(tmp_path: Path) -> None:
     merged = CompositeRunControl(drain, inbox)
     kinds = [type(c).__name__ for c in merged.poll()]
     assert kinds == ["Stop", "Prompt"]
+
+
+def test_wind_down_command_round_trips_through_inbox(tmp_path: Path) -> None:
+    """WindDownCommand can be enqueued and polled back through FileRunControl."""
+    inbox = tmp_path / "inbox"
+    control = FileRunControl(inbox)
+    cmd = WindDownCommand(reason="capacity exhausted")
+    path = control.enqueue(cmd)
+    assert path.is_file()
+
+    commands = list(control.poll())
+    assert commands == [cmd]
+    assert not path.exists()
+    assert (inbox / "archive" / path.name).is_file()
 
 
 def test_savepoint_subject_format() -> None:

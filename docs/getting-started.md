@@ -3,8 +3,13 @@
 ## Install
 
 ```bash
-pipx install .
-# or: pip install -e ".[dev]"
+pipx install codexloop
+```
+
+From a clone (contributors):
+
+```bash
+pip install -e ".[dev,docs]"
 ```
 
 ## Preflight

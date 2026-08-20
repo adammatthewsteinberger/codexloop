@@ -19,6 +19,8 @@ from codexloop.domain.errors import ConfigurationError
 def sysexit_for(result: RunResult) -> int:
     if result.reason == "stop":
         return 130
+    if result.reason.startswith("wind-down"):
+        return 75  # EX_TEMPFAIL — signals handoff to supervisor
     if result.success:
         return 0
     return 1
