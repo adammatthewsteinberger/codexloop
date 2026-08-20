@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.1](https://github.com/adammatthewsteinberger/codexloop/compare/v0.3.0...v0.3.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* wire event sink into CodexExecGateway for real runs ([#30](https://github.com/adammatthewsteinberger/codexloop/issues/30)) ([a584737](https://github.com/adammatthewsteinberger/codexloop/commit/a58473720d8baaae25fcef84df2d659355d0424f))
+
+
+### Documentation
+
+* engagement refresh — README, community files, metadata ([#28](https://github.com/adammatthewsteinberger/codexloop/issues/28)) ([30a352e](https://github.com/adammatthewsteinberger/codexloop/commit/30a352e98b5e65d4b3885ff07c9ebcd655f2d4fc))
+* update links for renamed repos (vibey-bootstrap, vibey-skills, engineering-influence-skills) ([#29](https://github.com/adammatthewsteinberger/codexloop/issues/29)) ([61cb571](https://github.com/adammatthewsteinberger/codexloop/commit/61cb571534e5f4b50ed25c417af147f9b584a3d5))
+
 ## [0.3.0](https://github.com/adammatthewsteinberger/codexloop/compare/v0.2.0...v0.3.0) (2026-08-16)
 
 
