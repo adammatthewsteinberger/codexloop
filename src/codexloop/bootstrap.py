@@ -12,7 +12,12 @@ from typing import Any
 
 import anyio
 
-from codexloop.application.ports import AgentGateway, CapacityProbe, RunEventSink
+from codexloop.application.ports import (
+    AgentGateway,
+    CapacityProbe,
+    RunEventSink,
+    RunSnapshotSink,
+)
 from codexloop.application.runner import RunnerContext
 from codexloop.application.usecases.doctor import DoctorReport, run_doctor
 from codexloop.application.usecases.run_control import enqueue_control
@@ -47,6 +52,7 @@ from codexloop.infrastructure.logging import (
 from codexloop.infrastructure.notify import CommandNotifier
 from codexloop.infrastructure.progress import LoggingProgressReporter
 from codexloop.infrastructure.rollout import read_rollout_rate_limits
+from codexloop.infrastructure.run_snapshot import RunDirSnapshotSink
 from codexloop.infrastructure.rundir import RunDirectory, runs_root_for, write_handoff_marker
 from codexloop.infrastructure.snapshot import create_snapshot, restore_snapshot
 from codexloop.infrastructure.state import FileRunStateStore
@@ -233,8 +239,10 @@ def build_runner(
 
     # Create event sink if we have a run directory
     event_sink: RunEventSink | None = None
+    snapshot_sink: RunSnapshotSink | None = None
     if rundir is not None:
         event_sink = JsonlRunEventSink(rundir.events_path)
+        snapshot_sink = RunDirSnapshotSink(rundir.snapshots)
 
     if scripted is not None:
         gateway, probe = scripted
@@ -290,6 +298,7 @@ def build_runner(
         wait_policy=wait_policy,
         max_wait=config.max_wait,
         handoff_marker_writer=handoff_marker_writer,
+        snapshot_sink=snapshot_sink,
         run_id=rundir.run_id if rundir is not None else "anonymous",
         cwd=str(cwd),
         model=config.model or "codex-default",

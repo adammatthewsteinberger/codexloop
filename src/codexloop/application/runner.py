@@ -17,6 +17,7 @@ from codexloop.application.ports import (
     PermissionMode,
     ProgressReporter,
     RunControl,
+    RunSnapshotSink,
     RunStateStore,
     SessionLock,
     Sleeper,
@@ -123,6 +124,7 @@ class RunnerContext:
     max_wait: timedelta | None = None
     logger: Logger | None = None
     handoff_marker_writer: Callable[[HandoffMarker], None] | None = None
+    snapshot_sink: RunSnapshotSink | None = None
     wind_down_policy: WindDownPolicy = field(default_factory=WindDownPolicy)
     run_id: str = "anonymous"
     cwd: str = "."
@@ -146,6 +148,7 @@ class AutonomousRunner:
         self._budget = ctx.budget
         self._log = ctx.logger or _NullLogger()
         self._handoff_marker_writer = ctx.handoff_marker_writer
+        self._snapshot_sink = ctx.snapshot_sink
         self._wind_down_policy = ctx.wind_down_policy
         self._wait_policy = ctx.wait_policy or AdaptiveWaitPolicy(WaitConfig(), rand=lambda: 0.0)
         self._max_wait = ctx.max_wait
@@ -441,6 +444,12 @@ class AutonomousRunner:
         if reason is not None:
             state["reason"] = reason
         self._store.save(run_id, state)
+        # Same state, second destination: the run directory's
+        # snapshots/latest.json, which external readers poll on a stable
+        # path rather than parsing the event stream. session_id carries the
+        # codex thread id so a reader can resume the right conversation.
+        if self._snapshot_sink is not None:
+            self._snapshot_sink.write({**state, "run_id": run_id, "session_id": key})
 
     def _record_thread(self, thread_id: str | None, started: datetime) -> None:
         if self._catalog is None or thread_id is None:
