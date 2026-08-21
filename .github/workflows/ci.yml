@@ -36,16 +36,21 @@ jobs:
       - run: bandit -q -r src/codexloop
       - run: pip-audit
       # Per layer, not in aggregate: a blanket floor lets a well-tested domain
-      # hide an untested adapter. pytest-cov unions --cov scopes within one
-      # invocation, so each floor needs its own run.
+      # hide an untested adapter. Each floor still gets its own gate, but they
+      # now read one instrumented run instead of re-running the whole suite
+      # four times (~93s -> ~16s). `coverage report --include` filters the
+      # existing data file per layer, so granularity is unchanged: an
+      # uncovered line in one layer fails only that layer's gate.
+      - name: Instrumented suite (feeds the four coverage floors)
+        run: pytest -q --cov=codexloop --cov-branch --cov-report=
       - name: Coverage floor - domain (100%)
-        run: pytest -q --cov=codexloop.domain --cov-fail-under=100
+        run: coverage report --include='src/codexloop/domain/*' --fail-under=100
       - name: Coverage floor - application (100%)
-        run: pytest -q --cov=codexloop.application --cov-fail-under=100
+        run: coverage report --include='src/codexloop/application/*' --fail-under=100
       - name: Coverage floor - infrastructure (100%)
-        run: pytest -q --cov=codexloop.infrastructure --cov-fail-under=100
+        run: coverage report --include='src/codexloop/infrastructure/*' --fail-under=100
       - name: Coverage floor - cli (100%)
-        run: pytest -q --cov=codexloop.cli --cov-fail-under=100
+        run: coverage report --include='src/codexloop/cli/*' --fail-under=100
 
   docs:
     name: MkDocs builds strictly

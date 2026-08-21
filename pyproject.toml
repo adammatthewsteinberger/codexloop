@@ -55,6 +55,7 @@ Changelog = "https://github.com/adammatthewsteinberger/codexloop/blob/main/CHANG
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.5",
     "pytest-asyncio>=0.24",
     "hypothesis>=6.100",
     "mypy>=1.10",
@@ -106,7 +107,13 @@ testpaths = ["tests"]
 # explicitly-scoped invocation back out to the whole package, defeating the
 # per-layer gate without any error. Coverage scope and its gate are passed
 # explicitly at each call site instead.
-addopts = "--cov-report=term-missing -m \"not live and not system\""
+#
+# Per-layer floors no longer need one full suite run each: a single
+# instrumented run over the whole package, then `coverage report
+# --include='src/codexloop/<layer>/*' --fail-under=100` per layer, gives
+# the same per-layer granularity from one data file (the union problem
+# above is a pytest-cov behavior, not a coverage-report one). 93s -> 16s.
+addopts = "--cov-report=term-missing -m \"not live and not system\" -n auto --maxprocesses=8"
 asyncio_mode = "auto"
 markers = [
     "live: exercises a real Codex/OpenAI account (free tier — no token spend). Opt in with -m live.",
