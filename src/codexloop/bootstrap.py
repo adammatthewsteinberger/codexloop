@@ -299,6 +299,7 @@ def build_runner(
         max_wait=config.max_wait,
         handoff_marker_writer=handoff_marker_writer,
         snapshot_sink=snapshot_sink,
+        event_sink=event_sink,
         run_id=rundir.run_id if rundir is not None else "anonymous",
         cwd=str(cwd),
         model=config.model or "codex-default",
