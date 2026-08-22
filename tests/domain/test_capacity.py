@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Capacity value objects: RateLimitWindow, PlanWindows, CapacityState, is_waitable."""
 
 from __future__ import annotations

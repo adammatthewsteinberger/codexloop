@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """RunDirSnapshotSink: the always-current run snapshot at a stable path.
 
 The port existed with no implementation and no caller, so every codexloop

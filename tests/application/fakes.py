@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Fakes implementing application ports. Never wall-clock sleep."""
 
 from __future__ import annotations

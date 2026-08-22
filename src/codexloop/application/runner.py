@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """AutonomousRunner — executes domain.loop Decisions against application ports."""
 
 from __future__ import annotations

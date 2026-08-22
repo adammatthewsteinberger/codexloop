@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """``codexloop watch`` — print current run state (one-shot or continuous)."""
 
 from __future__ import annotations

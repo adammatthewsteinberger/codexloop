@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Fake ``codex app-server --stdio`` for handshake and degradation tests."""
 
 from __future__ import annotations

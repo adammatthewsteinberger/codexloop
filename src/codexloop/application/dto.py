@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Application DTOs. ``TurnSignals`` lives in domain and is re-exported here."""
 
 from __future__ import annotations

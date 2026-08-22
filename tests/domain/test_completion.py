@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Three-layer completion evaluation: structured → marker → continue."""
 
 from __future__ import annotations

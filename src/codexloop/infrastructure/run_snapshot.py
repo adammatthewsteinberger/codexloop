@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Writes ``<run_dir>/snapshots/latest.json`` — the always-current run
 snapshot.
 

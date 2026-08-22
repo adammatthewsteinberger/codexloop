@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Supervised ``codex`` subprocess: concurrent pumps and process-group teardown.
 
 ``ProcessResult.stderr_tail`` is the last :data:`STDERR_TAIL_BYTES` (8 KiB) of

@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Generated OpenAI SDK REST CLI (M4)."""
 
 from __future__ import annotations

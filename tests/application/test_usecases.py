@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Thin use-case wrappers around AutonomousRunner and the ports."""
 
 from __future__ import annotations

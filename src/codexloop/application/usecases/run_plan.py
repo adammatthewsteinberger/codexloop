@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Use case: drive a new run from a markdown work plan."""
 
 from __future__ import annotations

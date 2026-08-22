@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Approval policy × sandbox mode matrix, including the security-drift guard."""
 
 from __future__ import annotations

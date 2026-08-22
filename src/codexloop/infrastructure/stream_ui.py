@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Optional Textual live token view (``--stream-ui``).
 
 !!! note "Roadmap"

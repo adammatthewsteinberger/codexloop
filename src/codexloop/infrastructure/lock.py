@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """SessionLock — advisory file lock keyed by thread id, with stale-pid break."""
 
 from __future__ import annotations

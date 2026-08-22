@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Map app-server ``account/rateLimits/read`` results onto ``PlanWindows``.
 
 Field names match the exec JSONL rate-limit blob already parsed in
