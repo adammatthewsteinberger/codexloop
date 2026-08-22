@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """JSON Schema for structured completion verdicts (R12)."""
 
 from __future__ import annotations

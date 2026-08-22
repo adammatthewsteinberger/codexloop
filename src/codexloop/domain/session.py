@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Thread identity and how a run selects a session."""
 
 from __future__ import annotations

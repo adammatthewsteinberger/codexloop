@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """ExecCapacityProbe: ephemeral read-only argv, classify outcomes, spawn failures."""
 
 from __future__ import annotations

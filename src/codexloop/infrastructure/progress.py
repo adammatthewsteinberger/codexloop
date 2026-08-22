@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """ProgressReporter — log-based adapter for operator-visible run events."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Typer root app and console-script entry point.
 
 Registered in pyproject.toml as:

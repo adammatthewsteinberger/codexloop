@@ -1,9 +1,0 @@
-{
-  "packages": {
-    ".": {
-      "release-type": "python",
-      "package-name": "codexloop",
-      "changelog-path": "CHANGELOG.md"
-    }
-  }
-}

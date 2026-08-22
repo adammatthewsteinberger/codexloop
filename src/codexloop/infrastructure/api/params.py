@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Classify SDK method parameters for Typer / Click binding."""
 
 from __future__ import annotations

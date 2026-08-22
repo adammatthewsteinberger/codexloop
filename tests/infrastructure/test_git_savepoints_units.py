@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Two helpers on the save-point store, tested directly.
 
 Both are reached through git in the integration tests, and both were covered on
