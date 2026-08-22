@@ -55,6 +55,7 @@ for a from-source setup.
 codexloop doctor                        # codex version, login status, probe strategies, MCP OAuth
 codexloop capacity                      # ChatGPT plan windows when known; says so honestly when not
 codexloop run plan.md --max-turns 20    # seed a run from a markdown plan and drive it to completion
+codexloop run plan.md --network-access  # trusted task that needs PostgreSQL/HTTP access
 codexloop resume --last                 # or: codexloop resume <thread-id>
 codexloop threads                       # this product's run registry (not vendor Codex sessions)
 codexloop api models list               # any OpenAI SDK endpoint (generated; see docs)
@@ -77,6 +78,16 @@ codexloop unwind 1                                   # git save-point restore (r
 `--transport app-server` opts into the experimental Codex app-server protocol
 and falls back to `exec` when it is unavailable
 ([ADR 0009](https://adammatthewsteinberger.github.io/codexloop/architecture/adr/0009-optional-app-server/)).
+
+Network access remains off by default in the `workspace-write` sandbox. Enable
+it per invocation with `--network-access`, per process with
+`CODEXLOOP_NETWORK_ACCESS=true`, or in `codexloop.toml` with
+`network_access = true`. This permits outbound command networking generally; it
+is not a localhost- or PostgreSQL-only allowlist. Use it only for trusted tasks.
+Runs record the effective `sandbox_mode` and `network_access` values in
+`.codexloop/runs/<run_id>/meta.json`. Because the app-server transport cannot
+currently express this setting, CodexLoop uses the exec transport whenever it
+is enabled.
 
 ## Why it's different from just retrying on 429
 

@@ -34,6 +34,7 @@ from codexloop.bootstrap import (
 )
 from codexloop.domain.control import Stop
 from codexloop.domain.errors import ConfigurationError
+from codexloop.domain.handoff_marker import HandoffMarker
 from codexloop.domain.session import ThreadRef
 from codexloop.infrastructure.agent.scripted import (
     ALLOW_TEST_AGENT_ENV,
@@ -119,6 +120,37 @@ def test_select_gateway_prints_reason_on_fallback(
     monkeypatch.setattr("codexloop.bootstrap.probe_app_server_transport", fail)
     build_runner(RunnerConfig(), transport="app-server", cwd=tmp_path)
     assert "appserver unavailable" in capsys.readouterr().err
+
+
+def test_network_access_forces_exec_without_app_server_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    async def should_not_run(*, cwd: Path) -> tuple[object, None]:
+        del cwd
+        raise AssertionError("app-server probe must not run with network access")
+
+    monkeypatch.setattr("codexloop.bootstrap.probe_app_server_transport", should_not_run)
+    ctx = build_runner(RunnerConfig(network_access=True), transport="app-server", cwd=tmp_path)
+    assert ctx.gateway.__class__.__name__ == "CodexExecGateway"
+    assert "network access requires exec transport" in capsys.readouterr().err
+
+
+def test_build_runner_records_effective_sandbox_settings(tmp_path: Path) -> None:
+    ctx = build_runner(RunnerConfig(network_access=True), cwd=tmp_path)
+    assert ctx.run_id is not None
+    meta_path = runs_root_for(tmp_path) / ctx.run_id / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["sandbox_mode"] == "workspace-write"
+    assert meta["network_access"] is True
+
+    assert ctx.handoff_marker_writer is not None
+    marker = HandoffMarker(
+        run_id=ctx.run_id,
+        reason="test",
+        produced_at=datetime(2026, 8, 22, tzinfo=UTC),
+    )
+    ctx.handoff_marker_writer(marker)
+    assert (runs_root_for(tmp_path) / ctx.run_id / "handoff.json").is_file()
 
 
 def test_build_runner_scripted_and_write_artifact(

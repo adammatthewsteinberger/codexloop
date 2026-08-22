@@ -38,6 +38,7 @@ def _base_opts(**overrides: Any) -> ExecOpts:
         "approval": ApprovalPolicy.NEVER,
         "sandbox": SandboxMode.WORKSPACE_WRITE,
         "add_dirs": (),
+        "network_access": False,
         "output_schema": None,
         "output_last_message": None,
         "skip_git_repo_check": False,
@@ -69,6 +70,7 @@ def test_exec_and_resume_express_identical_policy_via_c() -> None:
     assert exec_c == resume_c == resume_last_c
     assert 'approval_policy="on-request"' in exec_c
     assert 'sandbox_mode="read-only"' in exec_c
+    assert "sandbox_workspace_write.network_access=false" in exec_c
     assert 'model_reasoning_effort="high"' in exec_c
 
 
@@ -153,6 +155,8 @@ def test_builders_return_list_not_str() -> None:
                 "-c",
                 'sandbox_mode="workspace-write"',
                 "-c",
+                "sandbox_workspace_write.network_access=false",
+                "-c",
                 'model_reasoning_effort="low"',
                 "--",
                 "p",
@@ -181,6 +185,8 @@ def test_builders_return_list_not_str() -> None:
                 'approval_policy="untrusted"',
                 "-c",
                 'sandbox_mode="read-only"',
+                "-c",
+                "sandbox_workspace_write.network_access=false",
                 "-c",
                 'model_reasoning_effort="high"',
                 "--add-dir",
@@ -211,6 +217,8 @@ def test_builders_return_list_not_str() -> None:
                 'approval_policy="on-failure"',
                 "-c",
                 'sandbox_mode="danger-full-access"',
+                "-c",
+                "sandbox_workspace_write.network_access=false",
                 "--",
                 "minimal",
             ],
@@ -234,6 +242,8 @@ def test_builders_return_list_not_str() -> None:
                 'approval_policy="on-request"',
                 "-c",
                 'sandbox_mode="workspace-write"',
+                "-c",
+                "sandbox_workspace_write.network_access=false",
                 "-c",
                 'model_reasoning_effort="medium"',
                 "--",
@@ -277,6 +287,14 @@ def test_resume_argv_prefix_and_shared_flags(
     assert argv[len(expected_prefix) :] == exec_argv[3:]
 
 
+def test_network_access_is_a_toml_boolean_for_exec_and_resume() -> None:
+    opts = _base_opts(network_access=True)
+    for argv in (build_exec_argv(opts), build_resume_argv("tid", opts)):
+        overrides = _c_overrides(argv)
+        assert "sandbox_workspace_write.network_access=true" in overrides
+        assert 'sandbox_workspace_write.network_access="true"' not in overrides
+
+
 def test_probe_argv_exact() -> None:
     assert build_probe_argv(_base_opts(prompt="ignored")) == [
         "codex",
@@ -299,6 +317,7 @@ def test_exec_opts_defaults() -> None:
     assert opts.model is None
     assert opts.effort is None
     assert opts.add_dirs == ()
+    assert opts.network_access is False
     assert opts.output_schema is None
     assert opts.output_last_message is None
     assert opts.skip_git_repo_check is False
