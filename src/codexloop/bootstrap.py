@@ -177,7 +177,19 @@ def _select_gateway(
     config: RunnerConfig,
     event_sink: RunEventSink | None = None,
 ) -> AgentGateway:
+    opts = ExecOpts(
+        prompt="",
+        model=config.model,
+        add_dirs=config.add_dirs,
+        network_access=config.network_access,
+    )
     if transport == "app-server":
+        if config.network_access:
+            print(
+                "codexloop: network access requires exec transport; using exec",
+                file=sys.stderr,
+            )
+            return CodexExecGateway(cwd=cwd, opts=opts, event_sink=event_sink)
 
         async def _probe() -> tuple[AgentGateway | None, str | None]:
             return await probe_app_server_transport(cwd=cwd)
@@ -189,14 +201,14 @@ def _select_gateway(
             print(f"codexloop: {reason}", file=sys.stderr)
         return CodexExecGateway(
             cwd=cwd,
-            opts=ExecOpts(prompt="", model=config.model, add_dirs=config.add_dirs),
+            opts=opts,
             event_sink=event_sink,
         )
     if transport != "exec":
         raise ConfigurationError(f"unknown transport {transport!r}")
     return CodexExecGateway(
         cwd=cwd,
-        opts=ExecOpts(prompt="", model=config.model, add_dirs=config.add_dirs),
+        opts=opts,
         event_sink=event_sink,
     )
 
@@ -241,6 +253,12 @@ def build_runner(
     event_sink: RunEventSink | None = None
     snapshot_sink: RunSnapshotSink | None = None
     if rundir is not None:
+        rundir.update_meta(
+            {
+                "sandbox_mode": "workspace-write",
+                "network_access": config.network_access,
+            }
+        )
         event_sink = JsonlRunEventSink(rundir.events_path)
         snapshot_sink = RunDirSnapshotSink(rundir.snapshots)
 

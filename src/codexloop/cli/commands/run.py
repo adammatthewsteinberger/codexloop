@@ -34,6 +34,14 @@ async def run(
     model: str | None = typer.Option(None, "--model", help="Model name."),
     max_turns: int | None = typer.Option(None, "--max-turns", help="Turn budget."),
     max_wait: str | None = typer.Option(None, "--max-wait", help="Max wait duration."),
+    network_access: bool | None = typer.Option(
+        None,
+        "--network-access/--no-network-access",
+        help=(
+            "Allow outbound command network access inside the workspace-write sandbox. "
+            "This is not limited to localhost."
+        ),
+    ),
     stream_ui: bool = typer.Option(
         False,
         "--stream-ui",
@@ -45,6 +53,7 @@ async def run(
         "model": model,
         "max_turns": max_turns,
         "max_wait": max_wait,
+        "network_access": network_access,
     }
     try:
         ctx = build_runner(transport=transport, flags=flags, run_id=run_id)

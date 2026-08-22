@@ -20,6 +20,7 @@ max_turns = 10
 json_logs = true
 max_wait = "1h"
 add_dirs = ["user-dir"]
+network_access = true
 """
 
 _PROJECT_TOML = """\
@@ -28,6 +29,7 @@ max_turns = 20
 json_logs = false
 max_wait = "2h"
 add_dirs = ["project-dir"]
+network_access = false
 """
 
 
@@ -49,6 +51,7 @@ def test_defaults_when_nothing_is_set(tmp_path: Path) -> None:
     assert config.json_logs is False
     assert config.max_wait == timedelta(hours=24)
     assert config.add_dirs == ()
+    assert config.network_access is False
 
 
 def test_user_toml_overrides_defaults(tmp_path: Path) -> None:
@@ -60,6 +63,7 @@ def test_user_toml_overrides_defaults(tmp_path: Path) -> None:
     assert config.json_logs is True
     assert config.max_wait == timedelta(hours=1)
     assert config.add_dirs == ("user-dir",)
+    assert config.network_access is True
 
 
 def test_project_toml_overrides_user_toml(tmp_path: Path) -> None:
@@ -70,6 +74,7 @@ def test_project_toml_overrides_user_toml(tmp_path: Path) -> None:
     assert config.json_logs is False
     assert config.max_wait == timedelta(hours=2)
     assert config.add_dirs == ("project-dir",)
+    assert config.network_access is False
 
 
 def test_env_overrides_project_toml(tmp_path: Path) -> None:
@@ -80,6 +85,7 @@ def test_env_overrides_project_toml(tmp_path: Path) -> None:
         "CODEXLOOP_JSON_LOGS": "true",
         "CODEXLOOP_MAX_WAIT": "3h",
         "CODEXLOOP_ADD_DIRS": "env-a,env-b",
+        "CODEXLOOP_NETWORK_ACCESS": "true",
     }
     config = load_config(cwd=cwd, home=home, environ=environ)
     assert config.model == "env-model"
@@ -87,6 +93,7 @@ def test_env_overrides_project_toml(tmp_path: Path) -> None:
     assert config.json_logs is True
     assert config.max_wait == timedelta(hours=3)
     assert config.add_dirs == ("env-a", "env-b")
+    assert config.network_access is True
 
 
 def test_flags_override_env_and_files(tmp_path: Path) -> None:
@@ -97,6 +104,7 @@ def test_flags_override_env_and_files(tmp_path: Path) -> None:
         "CODEXLOOP_JSON_LOGS": "true",
         "CODEXLOOP_MAX_WAIT": "3h",
         "CODEXLOOP_ADD_DIRS": "env-a,env-b",
+        "CODEXLOOP_NETWORK_ACCESS": "false",
     }
     config = load_config(
         cwd=cwd,
@@ -108,6 +116,7 @@ def test_flags_override_env_and_files(tmp_path: Path) -> None:
             "json_logs": False,
             "max_wait": timedelta(hours=4),
             "add_dirs": ["flag-dir"],
+            "network_access": True,
         },
     )
     assert config.model == "flag-model"
@@ -115,6 +124,7 @@ def test_flags_override_env_and_files(tmp_path: Path) -> None:
     assert config.json_logs is False
     assert config.max_wait == timedelta(hours=4)
     assert config.add_dirs == ("flag-dir",)
+    assert config.network_access is True
 
 
 def test_flag_none_values_are_ignored(tmp_path: Path) -> None:
@@ -136,12 +146,14 @@ def test_env_false_bool_and_optional_string_fields(tmp_path: Path) -> None:
         home=tmp_path,
         environ={
             "CODEXLOOP_JSON_LOGS": "false",
+            "CODEXLOOP_NETWORK_ACCESS": "false",
             "CODEXLOOP_LOG_FILE": "/tmp/codexloop.log",
             "CODEXLOOP_NOTIFY_COMMAND": "echo hi",
             "CODEXLOOP_LOG_LEVEL": "DEBUG",
         },
     )
     assert config.json_logs is False
+    assert config.network_access is False
     assert config.log_file == "/tmp/codexloop.log"
     assert config.notify_command == "echo hi"
     assert config.log_level == "DEBUG"
@@ -159,6 +171,7 @@ def test_numeric_and_compound_duration_flags(tmp_path: Path) -> None:
     [
         ({"json_logs": "maybe"}, "invalid bool"),
         ({"json_logs": 1}, "invalid bool"),
+        ({"network_access": "maybe"}, "invalid bool"),
         ({"max_turns": True}, "invalid int"),
         ({"max_turns": 1.5}, "invalid int"),
         ({"max_wait": True}, "invalid duration"),

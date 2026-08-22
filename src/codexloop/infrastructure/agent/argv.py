@@ -24,6 +24,10 @@ def _c_override(key: str, value: str) -> list[str]:
     return ["-c", f"{key}={_quote_c_value(value)}"]
 
 
+def _c_bool_override(key: str, value: bool) -> list[str]:
+    return ["-c", f"{key}={'true' if value else 'false'}"]
+
+
 @dataclass(frozen=True, slots=True)
 class ExecOpts:
     """Options for ``codex exec`` / ``codex exec resume`` argv construction."""
@@ -34,6 +38,7 @@ class ExecOpts:
     approval: ApprovalPolicy = DEFAULT_APPROVAL
     sandbox: SandboxMode = DEFAULT_SANDBOX
     add_dirs: tuple[str, ...] = ()
+    network_access: bool = False
     output_schema: str | None = None
     output_last_message: str | None = None
     skip_git_repo_check: bool = False
@@ -46,6 +51,7 @@ def _shared_flags(opts: ExecOpts) -> list[str]:
         argv.extend(["--model", opts.model])
     argv.extend(_c_override("approval_policy", opts.approval.value))
     argv.extend(_c_override("sandbox_mode", opts.sandbox.value))
+    argv.extend(_c_bool_override("sandbox_workspace_write.network_access", opts.network_access))
     if opts.effort is not None:
         argv.extend(_c_override("model_reasoning_effort", opts.effort.value))
     for directory in opts.add_dirs:
