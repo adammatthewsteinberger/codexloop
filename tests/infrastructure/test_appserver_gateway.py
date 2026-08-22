@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """App-server AgentGateway: thread/turn RPCs, interrupt/steer, auto-approve."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """OpenAI / Codex error-code taxonomy for capacity classification."""
 
 from __future__ import annotations

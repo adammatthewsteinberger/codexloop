@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """``codexloop capacity`` — print plan windows or say they are unavailable."""
 
 from __future__ import annotations

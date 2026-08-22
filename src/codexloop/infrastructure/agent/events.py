@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Forgiving parser for ``codex exec --json`` JSONL events (R3, R4)."""
 
 from __future__ import annotations

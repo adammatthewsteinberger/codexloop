@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Use case: pre-flight doctor checks before a long unattended run."""
 
 from __future__ import annotations

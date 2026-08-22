@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Drift gate: every SDK endpoint must have a generated ``codexloop api`` command."""
 
 from __future__ import annotations

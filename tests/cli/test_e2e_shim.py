@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """End-to-end against the fake `codex` shim: markdown plan drives to Done."""
 
 from __future__ import annotations

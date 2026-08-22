@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """``codexloop reset`` — create a labeled savepoint of the current tree."""
 
 from __future__ import annotations

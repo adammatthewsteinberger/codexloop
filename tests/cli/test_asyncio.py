@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Unit coverage for CLI asyncio bridge helpers."""
 
 from __future__ import annotations

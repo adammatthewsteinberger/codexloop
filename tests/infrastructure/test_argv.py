@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Regression guards and option-matrix coverage for the Codex argv builder."""
 
 from __future__ import annotations

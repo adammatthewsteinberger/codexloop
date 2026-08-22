@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """CLI contract: help/version, prompt flags, exit codes, and bootstrap wiring."""
 
 from __future__ import annotations

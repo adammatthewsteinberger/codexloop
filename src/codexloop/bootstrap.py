@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Composition root — the only module permitted to import every onion layer."""
 
 from __future__ import annotations

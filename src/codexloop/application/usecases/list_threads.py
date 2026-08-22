@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Use case: list this product's run registry, not vendor sessions."""
 
 from __future__ import annotations

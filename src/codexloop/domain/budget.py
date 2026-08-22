@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Turn / dollar / wall-clock budgets and a monotonic ledger."""
 
 from __future__ import annotations

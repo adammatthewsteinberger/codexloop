@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Ops CLI: stop/prompt/capacity/doctor/savepoints and related commands."""
 
 from __future__ import annotations

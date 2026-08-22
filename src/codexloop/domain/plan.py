@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Markdown work-plan parsing. Checkboxes are the load-bearing items."""
 
 from __future__ import annotations

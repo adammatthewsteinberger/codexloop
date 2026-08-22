@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Operator inbox ControlCommand ADT: JSON round-trip, unknown kinds rejected."""
 
 from __future__ import annotations

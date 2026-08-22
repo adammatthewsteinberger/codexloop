@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Redaction by key and by credential pattern, including nested payloads."""
 
 from __future__ import annotations

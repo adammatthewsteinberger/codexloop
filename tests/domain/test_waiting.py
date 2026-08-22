@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Adaptive wait policy: next probe instant per capacity state."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Turn-level signals consumed by capacity classification."""
 
 from __future__ import annotations

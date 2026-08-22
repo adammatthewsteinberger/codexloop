@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Hypothesis strategies for TurnSignals and related domain values."""
 
 from __future__ import annotations

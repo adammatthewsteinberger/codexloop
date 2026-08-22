@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Shared pytest fixtures. The fake `codex` PATH shim is opt-in, not autouse."""
 
 from __future__ import annotations
