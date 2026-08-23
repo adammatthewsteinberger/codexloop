@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Shared helpers for system-live tests (real adapters + scripted agent)."""
 
 from __future__ import annotations

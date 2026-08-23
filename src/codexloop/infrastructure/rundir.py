@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Per-run control directory layout under ``.codexloop/runs/<run_id>/``."""
 
 from __future__ import annotations
@@ -79,6 +80,14 @@ class RunDirectory:
             self.state_path.write_text("{}\n", encoding="utf-8")
         if not self.events_path.is_file():
             self.events_path.touch()
+
+    def update_meta(self, values: dict[str, object]) -> None:
+        """Merge non-secret effective settings into the run metadata."""
+        data = json.loads(self.meta_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            data = {}
+        data.update(values)
+        self.meta_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def runs_root_for(cwd: Path) -> Path:

@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """In-process system matrix: real FS/control + scripted agent + FakeClock."""
 
 from __future__ import annotations

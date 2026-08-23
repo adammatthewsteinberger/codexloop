@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Pure run-loop state machine: (RunState, LoopOutcome, now) -> Decision."""
 
 from __future__ import annotations

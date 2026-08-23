@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """What `doctor` needs from the outside world, and the vocabulary it answers in.
 
 The result types live here alongside the Protocol: they are part of the seam's

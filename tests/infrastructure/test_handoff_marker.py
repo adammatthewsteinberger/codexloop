@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Handoff marker write: tmp-file + os.replace ensures crash-safety."""
 
 from __future__ import annotations

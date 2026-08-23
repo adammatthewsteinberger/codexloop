@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Best-effort rollout-tail telemetry (confidence C, R5). Strictly read-only."""
 
 from __future__ import annotations

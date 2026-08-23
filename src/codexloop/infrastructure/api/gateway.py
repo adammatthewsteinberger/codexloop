@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Invoke generated ``codexloop api`` commands against the OpenAI SDK."""
 
 from __future__ import annotations

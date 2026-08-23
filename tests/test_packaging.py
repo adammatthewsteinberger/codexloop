@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Packaging contract: version, typing marker, and installable metadata."""
 
 from __future__ import annotations

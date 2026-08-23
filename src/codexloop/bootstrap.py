@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Composition root — the only module permitted to import every onion layer."""
 
 from __future__ import annotations
@@ -12,7 +13,12 @@ from typing import Any
 
 import anyio
 
-from codexloop.application.ports import AgentGateway, CapacityProbe, RunEventSink
+from codexloop.application.ports import (
+    AgentGateway,
+    CapacityProbe,
+    RunEventSink,
+    RunSnapshotSink,
+)
 from codexloop.application.runner import RunnerContext
 from codexloop.application.usecases.doctor import DoctorReport, run_doctor
 from codexloop.application.usecases.run_control import enqueue_control
@@ -47,6 +53,7 @@ from codexloop.infrastructure.logging import (
 from codexloop.infrastructure.notify import CommandNotifier
 from codexloop.infrastructure.progress import LoggingProgressReporter
 from codexloop.infrastructure.rollout import read_rollout_rate_limits
+from codexloop.infrastructure.run_snapshot import RunDirSnapshotSink
 from codexloop.infrastructure.rundir import RunDirectory, runs_root_for, write_handoff_marker
 from codexloop.infrastructure.snapshot import create_snapshot, restore_snapshot
 from codexloop.infrastructure.state import FileRunStateStore
@@ -171,7 +178,19 @@ def _select_gateway(
     config: RunnerConfig,
     event_sink: RunEventSink | None = None,
 ) -> AgentGateway:
+    opts = ExecOpts(
+        prompt="",
+        model=config.model,
+        add_dirs=config.add_dirs,
+        network_access=config.network_access,
+    )
     if transport == "app-server":
+        if config.network_access:
+            print(
+                "codexloop: network access requires exec transport; using exec",
+                file=sys.stderr,
+            )
+            return CodexExecGateway(cwd=cwd, opts=opts, event_sink=event_sink)
 
         async def _probe() -> tuple[AgentGateway | None, str | None]:
             return await probe_app_server_transport(cwd=cwd)
@@ -183,14 +202,14 @@ def _select_gateway(
             print(f"codexloop: {reason}", file=sys.stderr)
         return CodexExecGateway(
             cwd=cwd,
-            opts=ExecOpts(prompt="", model=config.model, add_dirs=config.add_dirs),
+            opts=opts,
             event_sink=event_sink,
         )
     if transport != "exec":
         raise ConfigurationError(f"unknown transport {transport!r}")
     return CodexExecGateway(
         cwd=cwd,
-        opts=ExecOpts(prompt="", model=config.model, add_dirs=config.add_dirs),
+        opts=opts,
         event_sink=event_sink,
     )
 
@@ -233,8 +252,16 @@ def build_runner(
 
     # Create event sink if we have a run directory
     event_sink: RunEventSink | None = None
+    snapshot_sink: RunSnapshotSink | None = None
     if rundir is not None:
+        rundir.update_meta(
+            {
+                "sandbox_mode": "workspace-write",
+                "network_access": config.network_access,
+            }
+        )
         event_sink = JsonlRunEventSink(rundir.events_path)
+        snapshot_sink = RunDirSnapshotSink(rundir.snapshots)
 
     if scripted is not None:
         gateway, probe = scripted
@@ -290,6 +317,8 @@ def build_runner(
         wait_policy=wait_policy,
         max_wait=config.max_wait,
         handoff_marker_writer=handoff_marker_writer,
+        snapshot_sink=snapshot_sink,
+        event_sink=event_sink,
         run_id=rundir.run_id if rundir is not None else "anonymous",
         cwd=str(cwd),
         model=config.model or "codex-default",
