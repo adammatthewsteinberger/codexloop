@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Waiting-loop runner: quota top-up, window cadence, max_wait reason, unknown 429."""
 
 from __future__ import annotations

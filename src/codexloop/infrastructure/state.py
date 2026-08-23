@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """RunStateStore — persist run state as ``state.json`` under a run directory."""
 
 from __future__ import annotations

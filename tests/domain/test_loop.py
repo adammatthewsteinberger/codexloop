@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Run-loop state machine: transition table, exhaustiveness, terminals."""
 
 from __future__ import annotations

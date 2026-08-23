@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """CompositeCapacityProbe: B then C then A; enrichment never overrides exec."""
 
 from __future__ import annotations

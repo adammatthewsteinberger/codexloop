@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """``codexloop prompt`` — queue an operator prompt into the run inbox."""
 
 from __future__ import annotations

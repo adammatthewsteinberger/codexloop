@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Configuration precedence: flags > env > project toml > user toml > defaults."""
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ class RunnerConfig:
     json_logs: bool = False
     max_wait: timedelta = timedelta(hours=24)
     add_dirs: tuple[str, ...] = ()
+    network_access: bool = False
     log_level: str = "INFO"
     log_file: str | None = None
     notify_command: str | None = None
@@ -96,7 +98,7 @@ def _coerce_field(name: str, value: object) -> Any:
         return str(value)
     if name == "max_turns":
         return _as_int(value)
-    if name == "json_logs":
+    if name in {"json_logs", "network_access"}:
         return _as_bool(value)
     if name == "max_wait":
         return _as_duration(value)

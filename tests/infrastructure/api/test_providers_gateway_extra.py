@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Broader provider and gateway coverage for the M4 surface."""
 
 from __future__ import annotations

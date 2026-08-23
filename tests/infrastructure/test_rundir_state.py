@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Run directory layout, idempotent create, unique ids, and file state store."""
 
 from __future__ import annotations
@@ -38,6 +39,22 @@ def test_create_is_idempotent(tmp_path: Path) -> None:
     assert second.meta_path.is_file()
     assert second.inbox.is_dir()
     assert second.archive.is_dir()
+
+
+def test_update_meta_merges_effective_settings(tmp_path: Path) -> None:
+    directory = RunDirectory.create(runs_root_for(tmp_path))
+    directory.update_meta({"sandbox_mode": "workspace-write", "network_access": True})
+    meta = json.loads(directory.meta_path.read_text(encoding="utf-8"))
+    assert meta["run_id"] == directory.run_id
+    assert meta["sandbox_mode"] == "workspace-write"
+    assert meta["network_access"] is True
+
+
+def test_update_meta_recovers_from_non_object_json(tmp_path: Path) -> None:
+    directory = RunDirectory.create(runs_root_for(tmp_path))
+    directory.meta_path.write_text("[]\n", encoding="utf-8")
+    directory.update_meta({"network_access": False})
+    assert json.loads(directory.meta_path.read_text(encoding="utf-8")) == {"network_access": False}
 
 
 def test_run_id_is_uuid_and_never_reused(tmp_path: Path) -> None:

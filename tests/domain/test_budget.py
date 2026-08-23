@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Budget caps and a ledger that only moves forward."""
 
 from __future__ import annotations

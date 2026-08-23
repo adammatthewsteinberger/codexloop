@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Permission vocabulary shared across the seam, so vendor CLI flag strings
 never leak up into the application layer."""
 

@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Doctor environment unit tests with injectable subprocess fakes."""
 
 from __future__ import annotations

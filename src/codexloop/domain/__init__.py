@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Pure domain layer — stdlib only."""
 
 from codexloop.domain.error_codes import ErrorClass, classify_code

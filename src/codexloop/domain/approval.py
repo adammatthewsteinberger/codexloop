@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Approval policy × sandbox mode. Defaults never wait and stay in-workspace."""
 
 from __future__ import annotations

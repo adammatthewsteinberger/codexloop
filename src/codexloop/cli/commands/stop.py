@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """``codexloop stop`` — enqueue a Stop control command."""
 
 from __future__ import annotations

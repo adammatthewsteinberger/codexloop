@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Operator inbox commands: parse a JSON dict, never ignore unknown kinds."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """AutonomousRunner — executes domain.loop Decisions against application ports."""
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ from codexloop.application.ports import (
     PermissionMode,
     ProgressReporter,
     RunControl,
+    RunEventSink,
+    RunSnapshotSink,
     RunStateStore,
     SessionLock,
     Sleeper,
@@ -123,6 +126,8 @@ class RunnerContext:
     max_wait: timedelta | None = None
     logger: Logger | None = None
     handoff_marker_writer: Callable[[HandoffMarker], None] | None = None
+    snapshot_sink: RunSnapshotSink | None = None
+    event_sink: RunEventSink | None = None
     wind_down_policy: WindDownPolicy = field(default_factory=WindDownPolicy)
     run_id: str = "anonymous"
     cwd: str = "."
@@ -146,6 +151,8 @@ class AutonomousRunner:
         self._budget = ctx.budget
         self._log = ctx.logger or _NullLogger()
         self._handoff_marker_writer = ctx.handoff_marker_writer
+        self._snapshot_sink = ctx.snapshot_sink
+        self._event_sink = ctx.event_sink
         self._wind_down_policy = ctx.wind_down_policy
         self._wait_policy = ctx.wait_policy or AdaptiveWaitPolicy(WaitConfig(), rand=lambda: 0.0)
         self._max_wait = ctx.max_wait
@@ -264,6 +271,12 @@ class AutonomousRunner:
                             reason=f"wind-down: {wound_down.reason}",
                         )
                         self._write_handoff_marker(wound_down, thread_id, remaining)
+                        self._emit_verdict(
+                            success=False,
+                            reason=f"wind-down: {wound_down.reason}",
+                            thread_id=thread_id,
+                            remaining=remaining,
+                        )
                         return RunResult(
                             success=False,
                             reason=f"wind-down: {wound_down.reason}",
@@ -277,6 +290,12 @@ class AutonomousRunner:
                             first_turn_done=not first_turn,
                             plan_text=plan_text,
                             reason=finish.reason,
+                        )
+                        self._emit_verdict(
+                            success=finish.success,
+                            reason=finish.reason,
+                            thread_id=thread_id,
+                            remaining=remaining,
                         )
                         return RunResult(
                             success=finish.success,
@@ -419,6 +438,38 @@ class AutonomousRunner:
             http_status=turn.signals.http_status,
         )
 
+    def _emit_verdict(
+        self,
+        *,
+        success: bool,
+        reason: str | None,
+        thread_id: str | None,
+        remaining: Sequence[str],
+    ) -> None:
+        """Publish the run's terminal verdict to the event stream.
+
+        The done marker is otherwise purely an INPUT -- the string this
+        runner scans for in model output to decide completion. Nothing
+        published it, so a reader of events.jsonl could not tell a
+        completed run from an abandoned one without parsing meta.json.
+        Emitting it on success closes that gap and matches what the rest
+        of the loop family already publishes.
+        """
+        if self._event_sink is None:
+            return
+        payload: dict[str, object] = {
+            "type": "run.verdict",
+            "success": success,
+            "complete": success,
+            "reason": reason,
+            "remaining_work": list(remaining),
+        }
+        if thread_id is not None:
+            payload["thread_id"] = thread_id
+        if success:
+            payload["done_marker"] = DEFAULT_DONE_MARKER
+        self._event_sink.emit(payload)
+
     def _persist(
         self,
         *,
@@ -441,6 +492,12 @@ class AutonomousRunner:
         if reason is not None:
             state["reason"] = reason
         self._store.save(run_id, state)
+        # Same state, second destination: the run directory's
+        # snapshots/latest.json, which external readers poll on a stable
+        # path rather than parsing the event stream. session_id carries the
+        # codex thread id so a reader can resume the right conversation.
+        if self._snapshot_sink is not None:
+            self._snapshot_sink.write({**state, "run_id": run_id, "session_id": key})
 
     def _record_thread(self, thread_id: str | None, started: datetime) -> None:
         if self._catalog is None or thread_id is None:

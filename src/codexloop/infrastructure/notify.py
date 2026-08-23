@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Notifier — run a configured command, or record a no-op when unset."""
 
 from __future__ import annotations

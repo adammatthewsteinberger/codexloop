@@ -1,3 +1,4 @@
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Thin subprocess smoke: real ``codexloop`` CLI + env-gated scripted agent."""
 
 from __future__ import annotations

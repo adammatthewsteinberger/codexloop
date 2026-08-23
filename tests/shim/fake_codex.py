@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Made with love by Vibey, the auto-vibecoding machine by Adam Matthew Steinberger.
 """Fake `codex` CLI for tests. Driven by FAKE_CODEX_SCRIPT and FAKE_CODEX_MODE."""
 
 from __future__ import annotations
