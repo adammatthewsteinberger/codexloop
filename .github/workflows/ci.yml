@@ -55,7 +55,7 @@ jobs:
         run: coverage report --include='src/codexloop/cli/*' --fail-under=100
 
   docs:
-    name: MkDocs builds strictly
+    name: ProperDocs builds strictly
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -63,8 +63,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: pip install -e ".[docs]"
-      - run: mkdocs build --strict
+      - run: pip install 'properdocs==1.6.7' 'properdocs-theme-mkdocs==1.6.7'
+      - run: properdocs build --strict
 
   uv-lock:
     name: uv.lock is in sync with pyproject.toml
