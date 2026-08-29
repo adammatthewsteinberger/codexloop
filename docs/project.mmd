@@ -1,0 +1,92 @@
+%% codexloop architecture map — onion layers, transports, REST surface, control plane, and release channels.
+%% Rendered in docs/architecture/index.md and README.md. Keep in sync with src/codexloop/ and .github/workflows/.
+flowchart TB
+
+    subgraph CLI["cli/  (Typer)"]
+        App["app.py — root Typer app,\nglobal -v/-q/--log-level/--log-file"]
+        Cmds["commands/*.py\nrun · resume · threads · status · logs · runs\nprompt · stop · wind-down · capacity · doctor\nwatch · savepoints · unwind · reset · snapshot\nmodel · effort · approval · sandbox · cwd"]
+        ApiCli["api  (generated REST subcommands,\nmirrors installed openai SDK 1:1)"]
+        App --> Cmds
+        App --> ApiCli
+    end
+
+    subgraph Bootstrap["bootstrap.py — sole composition root"]
+        direction TB
+        Build["build_runner() / build_api_typer_app()\nthe only module that imports every layer"]
+    end
+
+    subgraph Application["application/  (ports + orchestration)"]
+        direction TB
+        Runner["runner.py — RunnerContext,\nrun_plan / resume_thread"]
+        UseCases["usecases/\nrun_plan · resume_thread · list_threads\nrun_control · doctor · preflight"]
+        Ports["ports.py + interfaces/\nAgentGateway · CapacityProbe · RunEventSink\nRunSnapshotSink · DoctorEnvironment · RunControl\nStorage · Observability · Permissions · Api"]
+    end
+
+    subgraph Domain["domain/  (pure stdlib, no I/O — import-linter enforced)"]
+        direction TB
+        DomainMods["errors · classify · error_codes · capacity\ncontrol · approval · completion · backoff\nwaiting · budget · verbosity · plan · loop\nmodel_profile · signals · session · savepoint\nsavepoint_message · handoff_marker · forecast"]
+    end
+
+    subgraph Infrastructure["infrastructure/  (only place openai/codex may be imported)"]
+        direction TB
+        Agent["agent/  — exec transport\nargv (never --full-auto/bare codex) · process\ngateway (CodexExecGateway) · probe · events\ntranslate · scripted (FakeAgent for tests)"]
+        AppServer["appserver/  — optional 2nd transport\nclient · gateway · ratelimits\n(falls back to exec when unavailable)"]
+        Api["api/  — generated REST surface\nintrospect · registry · binder · providers\nparams · json_io · gateway"]
+        ControlPlane["control.py · state.py · state_bus.py\nlock.py (AdvisoryFileLock) · rundir.py\nrun_snapshot.py · snapshot.py · git_savepoints.py"]
+        CrossCutting["config · logging · redact · audit\nnotify · progress · rollout · doctor_env\nclock (SystemClock/AnyioSleeper) · stream_ui"]
+    end
+
+    subgraph External["external systems"]
+        direction TB
+        CodexCli["codex exec --json\n(subprocess, stdin closed)"]
+        AppServerProto["Codex app-server protocol\n(experimental JSON-RPC)"]
+        OpenAiSdk["openai Python SDK\n(REST resource tree)"]
+        GitRepo["local git repository\n(save points, unwind)"]
+        RunDirFs[".codexloop/runs/<run_id>/\nstate · events.jsonl · inbox/ · snapshots/"]
+    end
+
+    Cmds --> Build
+    ApiCli --> Build
+    Build --> Runner
+    Build --> Ports
+    Runner --> UseCases
+    UseCases --> Ports
+    UseCases --> DomainMods
+    Ports -. implemented by .-> Agent
+    Ports -. implemented by .-> AppServer
+    Ports -. implemented by .-> ControlPlane
+    Ports -. implemented by .-> CrossCutting
+    Api --> Build
+
+    Agent --> CodexCli
+    AppServer --> AppServerProto
+    Api --> OpenAiSdk
+    ControlPlane --> GitRepo
+    ControlPlane --> RunDirFs
+
+    classDef boundary stroke-dasharray: 4 3
+    class External boundary
+
+    %% ---- Release channels (separate from the runtime process above) ----
+    subgraph ReleaseChannels["Release channels — .github/workflows/"]
+        direction LR
+        FeaturePr["feature/* PR\n(ci.yml: pytest, ruff, mypy,\nimport-linter, bandit, pip-audit)"]
+        DevelopBranch["develop\n(squash-merge)"]
+        MainBranch["main\n(merge commit)"]
+        ReleaseWf["release.yml — Release\npush-triggered, per-branch job"]
+        TestPyPi["TestPyPI\n(Trusted Publishing / OIDC)"]
+        PyPi["PyPI\n(Trusted Publishing / OIDC)"]
+        Surfaces["release-surfaces.yml\n(workflow_run: after Release succeeds)"]
+        Ghcr["GitHub Packages\nghcr.io/<owner>/<repo>/python (OCI)"]
+        Pages["GitHub Pages\nProperDocs — /develop/ + /main/ channels"]
+
+        FeaturePr --> DevelopBranch
+        DevelopBranch -- push --> ReleaseWf
+        ReleaseWf -- "develop: vibey-gh version --dev, build, publish" --> TestPyPi
+        DevelopBranch -- merge commit --> MainBranch
+        MainBranch -- push --> ReleaseWf
+        ReleaseWf -- "main: build committed version, publish" --> PyPi
+        ReleaseWf --> Surfaces
+        Surfaces --> Ghcr
+        Surfaces --> Pages
+    end

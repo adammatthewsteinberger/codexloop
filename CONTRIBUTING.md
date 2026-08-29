@@ -23,7 +23,7 @@ target. Live runs need the `codex` CLI on `PATH` and either `codex login` or
 ## The branch model (gitflow)
 
 ```
-main         ← always releasable; release-please opens release PRs against this
+main         ← always releasable; every push here publishes to PyPI
   ▲ (merge commit — preserves individual conventional commits)
 develop      ← integration branch; feature branches target this
   ▲ (squash-merge — one conventional-commit-titled squash per feature)
@@ -35,11 +35,13 @@ feature/*    ← your work
 3. Open a PR **into `develop`**, not `main`. CI runs the full quality-gate
    matrix.
 4. Your feature branch is **squash-merged** into `develop` — give the squash
-   title a conventional-commit-formatted summary of the whole PR.
-5. Periodically, `develop` is merged into `main` as a **merge commit**.
-   release-please maintains a standing release PR on `main`; merging *that*
-   is what cuts a version and publishes to PyPI. Every push to `develop`
-   publishes to TestPyPI. See [docs/publishing.md](docs/publishing.md).
+   title a conventional-commit-formatted summary of the whole PR. Every push
+   to `develop` stamps a dev version and publishes it to TestPyPI.
+5. Periodically, `develop` is merged into `main` as a **merge commit**. That
+   push is what cuts a release: the `release.yml` workflow builds from the
+   version already committed in `pyproject.toml` and publishes it straight
+   to PyPI — there is no standing release PR to merge. See
+   [docs/publishing.md](docs/publishing.md).
 
 Never implement on `main`.
 

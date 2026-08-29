@@ -25,5 +25,5 @@ Conventional Commits (`feat:`, `fix:`, `test:`, `chore:`, `docs:`).
 
 ## Publishing
 
-See [Publishing](publishing.md) for TestPyPI → PyPI Trusted Publishing and the
-release-please flow.
+See [Publishing](publishing.md) for the push-triggered `release.yml` flow:
+`develop` → TestPyPI, `main` → PyPI, both via Trusted Publishing.

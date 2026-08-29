@@ -7,7 +7,7 @@ top up). Pre-1.0. Python 3.12+.
 
 **This file is deliberately short — it holds facts, not procedures.** Every
 "how do I..." lives in a skill below; every "why was it built this way"
-lives in `docs/architecture/decisions/`.
+lives in `docs/architecture/adr/`.
 
 ## Non-negotiables
 
@@ -54,7 +54,7 @@ pip-audit
 | Need | Go to |
 |---|---|
 | How to work on any specific part of this codebase | `.agents/skills/`, `.claude/skills/`, `.cursor/rules/`, `.agent/rules/` |
-| System design and why each hard call was made | `docs/architecture/decisions/` |
+| System design and why each hard call was made | `docs/architecture/adr/` |
 | User-facing docs | `docs/getting-started/`, `docs/guides/` |
 | Contributor workflow, gitflow, releases | `CONTRIBUTING.md`, `docs/contributing/` |
 | Security policy | `SECURITY.md` |

@@ -4,7 +4,7 @@
 [![PyPI downloads](https://img.shields.io/pypi/dm/codexloop)](https://pypi.org/project/codexloop/)
 [![Python versions](https://img.shields.io/pypi/pyversions/codexloop)](https://pypi.org/project/codexloop/)
 [![CI](https://github.com/adammatthewsteinberger/codexloop/actions/workflows/ci.yml/badge.svg)](https://github.com/adammatthewsteinberger/codexloop/actions/workflows/ci.yml)
-[![Docs](https://github.com/adammatthewsteinberger/codexloop/actions/workflows/docs.yml/badge.svg)](https://adammatthewsteinberger.github.io/codexloop/)
+[![Docs](https://github.com/adammatthewsteinberger/codexloop/actions/workflows/release-surfaces.yml/badge.svg)](https://adammatthewsteinberger.github.io/codexloop/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/adammatthewsteinberger/codexloop/blob/develop/LICENSE)
 
 **Onion-architected, autonomous OpenAI Codex / GPT session runner and
@@ -114,11 +114,11 @@ is in the [`docs/`](https://github.com/adammatthewsteinberger/codexloop/tree/dev
 |---|---|
 | [Getting started](https://adammatthewsteinberger.github.io/codexloop/getting-started/) | Install, preflight, first run, transports |
 | [Generated REST surface](https://adammatthewsteinberger.github.io/codexloop/guides/rest-api-surface/) | `codexloop api …` — 1:1 over the `openai` SDK resource tree, `--provider openai\|azure\|custom`, drift gate |
-| [Architecture](https://adammatthewsteinberger.github.io/codexloop/architecture/) | The onion layers and the twelve [decision records](https://adammatthewsteinberger.github.io/codexloop/architecture/adr/) |
+| [Architecture](https://adammatthewsteinberger.github.io/codexloop/architecture/) | The onion layers, the twelve [decision records](https://adammatthewsteinberger.github.io/codexloop/architecture/adr/), and the full [Mermaid architecture map](https://github.com/adammatthewsteinberger/codexloop/blob/develop/docs/project.mmd) |
 | [CLI reference](https://adammatthewsteinberger.github.io/codexloop/reference/cli/) | Command index |
 | [Contributing](https://adammatthewsteinberger.github.io/codexloop/contributing/) / [Publishing](https://adammatthewsteinberger.github.io/codexloop/publishing/) | Setup, tests, coverage floors, TestPyPI → PyPI Trusted Publishing |
 | [Plans](https://github.com/adammatthewsteinberger/codexloop/tree/develop/docs/plans) | Design record, vendor research notes, and the shared transplant outline (GitHub tree; not in the site nav) |
-| [Changelog](https://github.com/adammatthewsteinberger/codexloop/blob/develop/CHANGELOG.md) | Release notes, maintained by release-please |
+| [Changelog](https://github.com/adammatthewsteinberger/codexloop/blob/develop/CHANGELOG.md) | Release notes |
 
 ## Project status
 

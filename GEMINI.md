@@ -38,5 +38,5 @@ pip-audit
 | Need | Go to |
 |---|---|
 | Procedures | `.agent/rules/`, `.claude/skills/`, `.cursor/rules/` |
-| ADRs | `docs/architecture/decisions/` |
-| Releases | `docs/contributing/release-process.md` |
+| ADRs | `docs/architecture/adr/` |
+| Releases | `docs/publishing.md` |

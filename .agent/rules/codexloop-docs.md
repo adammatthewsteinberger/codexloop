@@ -12,6 +12,7 @@ mkdocs-material.
 docs/
 ├── index.md                      # landing page
 ├── getting-started.md
+├── project.mmd                   # Mermaid architecture map
 ├── guides/                       # how-to guides
 │   └── rest-api-surface.md
 ├── architecture/
@@ -31,7 +32,9 @@ mkdocs serve          # live preview at http://127.0.0.1:8000
 mkdocs build --strict # fail on warnings
 ```
 
-`--strict` runs in CI via `.github/workflows/docs.yml`.
+There is no standalone `docs.yml`. `--strict` runs as part of the ProperDocs
+job in `.github/workflows/release-surfaces.yml`, triggered after a
+successful **Release** run on `develop` or `main`.
 
 ## ADRs
 
