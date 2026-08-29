@@ -19,7 +19,7 @@ flowchart TB
         direction TB
         Runner["runner.py — RunnerContext,\nrun_plan / resume_thread"]
         UseCases["usecases/\nrun_plan · resume_thread · list_threads\nrun_control · doctor · preflight"]
-        Ports["ports.py + interfaces/\nAgentGateway · CapacityProbe · RunEventSink\nRunSnapshotSink · DoctorEnvironment · RunControl\nStorage · Observability · Permissions · Api"]
+        Ports["ports.py + interfaces/\nAgentGateway · CapacityProbe · RunEventSink\nRunSnapshotSink · DoctorEnvironment · RunControl\nStorage · Observability · Permissions · Api\nClock · Sleeper (system.py — ambient effects)"]
     end
 
     subgraph Domain["domain/  (pure stdlib, no I/O — import-linter enforced)"]
@@ -32,7 +32,8 @@ flowchart TB
         Agent["agent/  — exec transport\nargv (never --full-auto/bare codex) · process\ngateway (CodexExecGateway) · probe · events\ntranslate · scripted (FakeAgent for tests)"]
         AppServer["appserver/  — optional 2nd transport\nclient · gateway · ratelimits\n(falls back to exec when unavailable)"]
         Api["api/  — generated REST surface\nintrospect · registry · binder · providers\nparams · json_io · gateway"]
-        ControlPlane["control.py · state.py · state_bus.py\nlock.py (AdvisoryFileLock) · rundir.py\nrun_snapshot.py · snapshot.py · git_savepoints.py"]
+        CapacityProbeNode["capacity_probe.py\nCompositeCapacityProbe — composes exec (floor,\nauthoritative) + app-server + rollout (enrichment)"]
+        ControlPlane["control.py · state.py · state_bus.py\nlock.py (AdvisoryFileLock) · rundir.py\nrun_snapshot.py · snapshot.py · git_savepoints.py\nevents.py (JsonlRunEventSink)"]
         CrossCutting["config · logging · redact · audit\nnotify · progress · rollout · doctor_env\nclock (SystemClock/AnyioSleeper) · stream_ui"]
     end
 
@@ -56,6 +57,7 @@ flowchart TB
     Ports -. implemented by .-> AppServer
     Ports -. implemented by .-> ControlPlane
     Ports -. implemented by .-> CrossCutting
+    Ports -. implemented by .-> CapacityProbeNode
     Api --> Build
 
     Agent --> CodexCli
@@ -63,6 +65,9 @@ flowchart TB
     Api --> OpenAiSdk
     ControlPlane --> GitRepo
     ControlPlane --> RunDirFs
+    CapacityProbeNode --> Agent
+    CapacityProbeNode --> AppServer
+    CapacityProbeNode --> CrossCutting
 
     classDef boundary stroke-dasharray: 4 3
     class External boundary
