@@ -7,11 +7,6 @@
 [![Docs](https://github.com/adammatthewsteinberger/codexloop/actions/workflows/release-surfaces.yml/badge.svg)](https://adammatthewsteinberger.github.io/codexloop/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/adammatthewsteinberger/codexloop/blob/develop/LICENSE)
 
-**Onion-architected, autonomous OpenAI Codex / GPT session runner and
-generated OpenAI SDK CLI** — never blocks on a human, never treats
-`insufficient_quota` as a waitable `rate_limit_exceeded` window, and resumes
-safely across usage windows.
-
 ## What problem this solves
 
 Codex sessions hit usage limits. A `codex exec` process exiting doesn't
@@ -26,6 +21,11 @@ is not to retry the second kind.
 automatically, so you can hand it a plan and walk away — including noticing
 a top-up or a plan-window reset on the next probe rather than at some fixed
 deadline.
+
+**[Onion-architected](https://adammatthewsteinberger.github.io/codexloop/architecture/) (dependencies point inward, domain stays pure), autonomous OpenAI
+Codex / GPT session runner and generated OpenAI SDK CLI** — never blocks on
+a human, never treats `insufficient_quota` as a waitable
+`rate_limit_exceeded` window, and resumes safely across usage windows.
 
 It is a deliberate transplant of the [claudeloop](https://github.com/adammatthewsteinberger/claudeloop)
 design — same state machine, same ports, same run-directory layout —
