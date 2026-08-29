@@ -20,6 +20,7 @@ flowchart TB
         Runner["runner.py — RunnerContext,\nrun_plan / resume_thread"]
         UseCases["usecases/\nrun_plan · resume_thread · list_threads\nrun_control · doctor · preflight"]
         Ports["ports.py + interfaces/\nAgentGateway · CapacityProbe · RunEventSink\nRunSnapshotSink · DoctorEnvironment · RunControl\nStorage · Observability · Permissions · Api\nClock · Sleeper (system.py — ambient effects)"]
+        Dto["dto.py — TokenUsage · TurnOutcome\nProbeResult · RunResult"]
     end
 
     subgraph Domain["domain/  (pure stdlib, no I/O — import-linter enforced)"]
@@ -29,7 +30,7 @@ flowchart TB
 
     subgraph Infrastructure["infrastructure/  (only place openai/codex may be imported)"]
         direction TB
-        Agent["agent/  — exec transport\nargv (never --full-auto/bare codex) · process\ngateway (CodexExecGateway) · probe · events\ntranslate · scripted (FakeAgent for tests)"]
+        Agent["agent/  — exec transport\nargv (never --full-auto/bare codex) · process\ngateway (CodexExecGateway) · probe · events\ntranslate · scripted (FakeAgent for tests)\nschema (COMPLETION_OUTPUT_SCHEMA)"]
         AppServer["appserver/  — optional 2nd transport\nclient · gateway · ratelimits\n(falls back to exec when unavailable)"]
         Api["api/  — generated REST surface\nintrospect · registry · binder · providers\nparams · json_io · gateway"]
         CapacityProbeNode["capacity_probe.py\nCompositeCapacityProbe — composes exec (floor,\nauthoritative) + app-server + rollout (enrichment)"]
@@ -53,6 +54,7 @@ flowchart TB
     Runner --> UseCases
     UseCases --> Ports
     UseCases --> DomainMods
+    UseCases --> Dto
     Ports -. implemented by .-> Agent
     Ports -. implemented by .-> AppServer
     Ports -. implemented by .-> ControlPlane
@@ -94,4 +96,22 @@ flowchart TB
         ReleaseWf --> Surfaces
         Surfaces --> Ghcr
         Surfaces --> Pages
+    end
+
+    %% ---- PR-automation / merge / promotion control plane (governs how a PR reaches
+    %% develop and main; distinct from the runtime CI matrix above) ----
+    subgraph MergeControlPlane["Merge & promotion control plane — .github/workflows/"]
+        direction LR
+        ProvenanceWf["provenance.yml — Provenance\nrequired check on every branch;\nrejects unfingerprinted commits"]
+        PrAutomationWf["pr-automation.yml — PR automation\npull_request_target + workflow_run(CI, Provenance)\nClaude exact-head review, repair, fork mirroring,\nconflict resolution, local-model fallback"]
+        MergeTrainWf["merge-train.yml — Merge train\ntriggered by a green PR automation gate;\nauto-merges ready PRs into develop"]
+        PromoteWf["promote-to-main.yml — Promote\ntriggered by Merge train success, Monday cron,\nor manual dispatch; opens/reuses a develop→main PR,\nrequires AUTOMERGE_TOKEN (admin-scoped)"]
+        BootstrapWf["automation-bootstrap.yml — Automation bootstrap\nworkflow_dispatch, admin-only, authorize=true;\nverifies independent gates, then admin squash-merges\na PR that repairs the automation itself"]
+
+        PrAutomationWf -- "on green gate" --> MergeTrainWf
+        MergeTrainWf -- "merges into" --> DevelopBranch
+        MergeTrainWf -- "on success" --> PromoteWf
+        PromoteWf -- "content-diff PR, AUTOMERGE_TOKEN merge" --> MainBranch
+        ProvenanceWf -. required check .-> PrAutomationWf
+        BootstrapWf -. "admin escape hatch when\nPR automation itself is broken" .-> DevelopBranch
     end

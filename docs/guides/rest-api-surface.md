@@ -45,6 +45,37 @@ is intentional:
 python -c "from codexloop.infrastructure.api.introspect import *; ..."  # or re-run the M4 freeze script
 ```
 
+## Webhook signature verification
+
+`codexloop api webhooks unwrap` and `codexloop api webhooks verify-signature`
+mirror the OpenAI SDK's local `webhooks` helper — there is no `webhooks`
+HTTP endpoint; these validate and parse webhook deliveries you already
+received (e.g. from a small HTTP server you run), using the signing secret
+from your OpenAI webhook configuration.
+
+Both need the raw request body and the signature-bearing headers
+(`webhook-id`, `webhook-timestamp`, `webhook-signature`) exactly as
+received — re-serializing the body first will change the payload and break
+verification.
+
+```bash
+codexloop api webhooks verify-signature \
+  --payload "$(cat request-body.json)" \
+  --headers '{"webhook-id":"...","webhook-timestamp":"...","webhook-signature":"..."}' \
+  --secret "$OPENAI_WEBHOOK_SECRET"
+# Raises / exits 2 on an invalid signature; prints nothing on success.
+
+codexloop api webhooks unwrap \
+  --payload "$(cat request-body.json)" \
+  --headers '{"webhook-id":"...","webhook-timestamp":"...","webhook-signature":"..."}' \
+  --secret "$OPENAI_WEBHOOK_SECRET"
+# Verifies the signature, then prints the parsed, typed webhook event.
+```
+
+`--secret` defaults to the `OPENAI_WEBHOOK_SECRET` environment variable when
+omitted, same as the underlying SDK helper. Like every other leaf command,
+both accept `--json`/`--json-file` as an alternative to individual flags.
+
 ## Providers
 
 - **openai** — first-party `OpenAI` client (`OPENAI_API_KEY`).

@@ -116,6 +116,7 @@ is in the [`docs/`](https://github.com/adammatthewsteinberger/codexloop/tree/dev
 | [Generated REST surface](https://adammatthewsteinberger.github.io/codexloop/guides/rest-api-surface/) | `codexloop api …` — 1:1 over the `openai` SDK resource tree, `--provider openai\|azure\|custom`, drift gate |
 | [Architecture](https://adammatthewsteinberger.github.io/codexloop/architecture/) | The onion layers, the twelve [decision records](https://adammatthewsteinberger.github.io/codexloop/architecture/adr/), and the full [Mermaid architecture map](https://github.com/adammatthewsteinberger/codexloop/blob/develop/docs/project.mmd) |
 | [CLI reference](https://adammatthewsteinberger.github.io/codexloop/reference/cli/) | Command index |
+| [Configuration reference](https://adammatthewsteinberger.github.io/codexloop/reference/configuration/) | `codexloop.toml`, every `CODEXLOOP_*` env var, and precedence order |
 | [Contributing](https://adammatthewsteinberger.github.io/codexloop/contributing/) / [Publishing](https://adammatthewsteinberger.github.io/codexloop/publishing/) | Setup, tests, coverage floors, TestPyPI → PyPI Trusted Publishing |
 | [Plans](https://github.com/adammatthewsteinberger/codexloop/tree/develop/docs/plans) | Design record, vendor research notes, and the shared transplant outline (GitHub tree; not in the site nav) |
 | [Changelog](https://github.com/adammatthewsteinberger/codexloop/blob/develop/CHANGELOG.md) | Release notes |

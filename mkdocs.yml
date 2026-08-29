@@ -38,7 +38,9 @@ nav:
           - "0010 Rollout best-effort": architecture/adr/0010-rollout-best-effort.md
           - "0011 Never consume resets": architecture/adr/0011-never-consume-resets.md
           - "0012 Minimum Codex version": architecture/adr/0012-minimum-codex-version.md
-  - Reference: reference/cli.md
+  - Reference:
+      - CLI: reference/cli.md
+      - Configuration: reference/configuration.md
   - Contributing: contributing.md
   - Publishing: publishing.md
 strict: true

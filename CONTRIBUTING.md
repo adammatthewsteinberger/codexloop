@@ -36,12 +36,24 @@ feature/*    ← your work
    matrix.
 4. Your feature branch is **squash-merged** into `develop` — give the squash
    title a conventional-commit-formatted summary of the whole PR. Every push
-   to `develop` stamps a dev version and publishes it to TestPyPI.
-5. Periodically, `develop` is merged into `main` as a **merge commit**. That
-   push is what cuts a release: the `release.yml` workflow builds from the
-   version already committed in `pyproject.toml` and publishes it straight
-   to PyPI — there is no standing release PR to merge. See
-   [docs/publishing.md](docs/publishing.md).
+   to `develop` stamps a dev version and publishes it to TestPyPI. This
+   merge is not manual: a green [`PR automation`](.github/workflows/pr-automation.yml)
+   gate triggers [`merge-train.yml`](.github/workflows/merge-train.yml),
+   which auto-merges every ready PR into `develop`.
+5. `develop` is merged into `main` as a **merge commit** by
+   [`promote-to-main.yml`](.github/workflows/promote-to-main.yml)
+   (triggered by a successful merge train, a Monday cron backstop, or manual
+   dispatch) — not by a human running `git merge`. It compares the branches
+   by content, opens or reuses a promotion pull request, and merges it once
+   gates pass, using an admin-scoped `AUTOMERGE_TOKEN` secret (falling back
+   to a manual `git push --force-with-lease` only if that secret is absent).
+   That merge to `main` is what cuts a release: the `release.yml` workflow
+   builds from the version already committed in `pyproject.toml` and
+   publishes it straight to PyPI — there is no standing release PR to merge
+   by hand. See [Automated merge and promotion pipeline](docs/contributing.md#automated-merge-and-promotion-pipeline)
+   for the full pipeline (including the PR-automation review/repair loop and
+   the admin-only `automation-bootstrap.yml` escape hatch) and
+   [docs/publishing.md](docs/publishing.md) for what happens after the merge.
 
 Never implement on `main`.
 

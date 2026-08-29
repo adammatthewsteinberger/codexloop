@@ -19,6 +19,12 @@ subcommand, e.g. `codexloop -v run plan.md`):
 Passing conflicting verbosity flags (e.g. `--quiet` with `--log-level`) exits
 with an error and code `2`.
 
+Every flag above, and several settings with no CLI flag at all
+(`add_dirs`, `json_logs`, `notify_command`), can also be set via
+`codexloop.toml` or a `CODEXLOOP_*` environment variable — see the
+[Configuration reference](configuration.md) for the full list, file
+locations, and precedence order.
+
 Commands that queue a control change (`prompt`, `stop`, `wind-down`, `model`,
 `effort`, `approval`, `sandbox`, `cwd`) all write into the target run's
 control inbox and are picked up at that run's next control boundary — they
@@ -152,6 +158,18 @@ if any check failed.
 | Option | Default | Meaning |
 |---|---|---|
 | `--cwd` | current directory | Working directory to check. |
+
+The checks, in the order they run:
+
+| Check | Fails when | What a failure means |
+|---|---|---|
+| `codex-cli` | `codex` isn't on `PATH`, or its `--version` is below the minimum supported version | Install or upgrade the [Codex CLI](https://github.com/openai/codex). |
+| `login-status` | `codex` is on `PATH` but `codex login status` exits non-zero | Run `codex login`, or set `OPENAI_API_KEY` / `CODEX_API_KEY` for API-key mode instead. |
+| `exec-flags` | `codex exec --help` is missing one of the flags `codexloop` depends on (`--json`, `--ephemeral`, `-c`) | The installed `codex` build is too old or was built without these flags; upgrade it. |
+| `auth-mode` | neither `OPENAI_API_KEY`/`CODEX_API_KEY` is set nor `~/.codex/auth.json` exists | No credentials are configured at all — pick API-key mode or `codex login`, never both. |
+| `probe-strategies` | never fails on its own (`passed` is always `true`) | Informational: which capacity-probe strategies (`exec`, `app-server`, `rollout`) are currently live vs. unavailable. |
+| `mcp-oauth` | one or more configured MCP servers require OAuth authorization that hasn't been completed | Authorize each named MCP server before starting an unattended run — an unattended run cannot complete an interactive OAuth flow if one is triggered mid-run. Passes trivially (with "no MCP OAuth servers named") when no MCP servers are configured. |
+| `working-directory` | `--cwd` (or the current directory) is not inside a git repository | `codexloop` expects a git repository for save points and `unwind`; `cd` into one or run `git init`. |
 
 ## Mid-run control
 

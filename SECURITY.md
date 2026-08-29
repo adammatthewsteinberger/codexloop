@@ -76,6 +76,15 @@ Report privately via one of:
 - Any way the generated REST surface (`codexloop api ...`) could execute an
   unintended request against a live OpenAI account — destructive actions
   executed without a clear, deliberate invocation.
+- The repository's own CI/CD trust boundary: `.github/workflows/pr-automation.yml`,
+  `merge-train.yml`, `promote-to-main.yml`, and `automation-bootstrap.yml`
+  gate what reaches `develop`/`main` and, from there, PyPI. Several of these
+  jobs push, merge, or promote using an optional `AUTOMERGE_TOKEN` secret
+  with elevated (ruleset-satisfying) permissions beyond the default
+  `GITHUB_TOKEN`. A path that let an untrusted PR influence what that token
+  does — beyond the deliberately isolated, credential-free review/repair
+  steps documented in [Contributing](docs/contributing.md#automated-merge-and-promotion-pipeline) —
+  is in scope.
 
 **Out of scope:**
 

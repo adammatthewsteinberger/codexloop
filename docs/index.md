@@ -10,4 +10,6 @@ codexloop doctor
 codexloop run plan.md
 ```
 
-See [Getting started](getting-started.md) and the [REST API guide](guides/rest-api-surface.md).
+See [Getting started](getting-started.md), the [CLI reference](reference/cli.md),
+the [Configuration reference](reference/configuration.md), and the
+[REST API guide](guides/rest-api-surface.md).
